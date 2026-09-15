@@ -80,6 +80,14 @@ MODEL_PRICING = {m: (_price_data[_key]["input"], _price_data[_key]["output"])
                      ("nemotron-3-nano-30b", "nemotron-3-nano-30b"),
                  ]}
 
+# Static cost prior ($/1000q): sets cheap-first ORDER only; reported costs use the tensor.
+MODEL_COSTS = {
+    "qwen3-0.6b": 0.0054, "qwen3-1.7b": 0.0161, "qwen3-4b": 0.0254,
+    "qwen3-8b": 0.2938, "qwen3-14b": 0.1733, "qwen3-30b-a3b": 0.3289,
+    "qwen3-32b": 0.2025, "qwen3-coder-next-fp8": 0.8074,
+    "nemotron-3-super-120b": 0.5036, "nemotron-3-nano-30b": 0.0655,
+}
+
 # Input-only prices ($/M tokens) — for computing S1 extra-token overhead
 MODEL_INPUT_PRICES = {m: p[0] for m, p in MODEL_PRICING.items()}
 
@@ -113,3 +121,56 @@ def call_cost(model_id, in_tok, out_tok):
     case-insensitively against price.json. Returns raw dollars, not $/1000q."""
     p = _PRICES.get(model_id.lower(), (0.0, 0.0))
     return (in_tok * p[0] + out_tok * p[1]) / 1e6
+
+
+# ─── Static routing cost matrix ($/1000q per (model, composite)) ───
+# A pass-through prior for cheap-first ORDERING; every reported dollar comes from
+# the realized per-probe tensor, not from here.
+import torch  # noqa: E402
+
+# Helper costs ($/1000q), token counts measured from probe data.
+# Llama-3.3-70B paraphrase: measured avg 289 input + 175 output tokens
+PARA_ABS_COST = (289 * 0.10 + 175 * 0.32) / 1e6 * 1e3    # $0.0849/1000q
+# S4 gpt-4o-mini harm judge: 326 in + 1.5 out. S5 reuses this twice (harm + refusal judge).
+S4_ABS_COST = (326 * 0.15 + 1.5 * 0.60) / 1e6 * 1e3      # $0.0490/1000q
+# Llama-3.3-70B backtranslation: avg 350 in + 24 out (N=22645)
+S5_BACKTR_COST = (350 * 0.10 + 24 * 0.32) / 1e6 * 1e3    # $0.0427/1000q
+# S1 SCR: extra input tokens from 4 retrieved primers, measured as target_B.in - target_A.in.
+S1_EXTRA_TOKENS = 447  # average, used in COST_MATRIX for routing
+
+
+def compute_defense_cost(model, pre, post):
+    """pre_overhead + target_generation + post_overhead, $/1000q. For S3 this is
+    the pass-through cost; the block case is handled separately."""
+    gen_cost = MODEL_COSTS[model]
+
+    # Pre-gen cost
+    if pre == "s0":
+        pre_ov = 0.0
+    elif pre == "s1":
+        pre_ov = S1_EXTRA_TOKENS * MODEL_INPUT_PRICES[model] / 1e6 * 1e3
+    elif pre == "s2":
+        pre_ov = PARA_ABS_COST
+    elif pre == "s3":
+        pre_ov = GUARD_ABS_COST
+
+    # Post-gen cost
+    if post == "s0":
+        post_ov = 0.0
+    elif post == "s4":
+        post_ov = S4_ABS_COST  # 1 GPT-4o-mini harmfulness judge call
+    elif post == "s5":
+        # S5: two gpt-4o-mini judges (~S4_ABS_COST each) + backtranslation + target re-query.
+        post_ov = S4_ABS_COST + S5_BACKTR_COST + gen_cost + S4_ABS_COST
+    elif post == "s6":
+        # S6 PARDEN: one extra target generation (the repeat); BLEU is free.
+        post_ov = gen_cost
+
+    return pre_ov + gen_cost + post_ov
+
+
+# Precompute cost matrix (N_MODELS, N_COMPOSITES) — absolute $/1000q
+COST_MATRIX = torch.zeros(N_MODELS, N_COMPOSITES)
+for mi, m in enumerate(MODELS):
+    for ci, (pre, post) in enumerate(COMPOSITES):
+        COST_MATRIX[mi, ci] = compute_defense_cost(m, pre, post)

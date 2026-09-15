@@ -35,9 +35,6 @@ ANCHOR_REGISTRY = {
     "s6": PardenStrategy,                   # Output Verification via Repetition (PARDEN)
 }
 
-PRE_GEN_ANCHORS = ("s0", "s1", "s2", "s3")
-POST_GEN_ANCHORS = ("s0", "s4", "s5", "s6")
-
 # The action space is exactly the 7 anchors.
 STRATEGY_REGISTRY = dict(ANCHOR_REGISTRY)
 

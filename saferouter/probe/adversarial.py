@@ -19,9 +19,11 @@ from typing import Dict, List, Tuple
 from openai import AsyncOpenAI
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from probe import LOCAL_TARGET_PORTS
 from safety_strategies import SafetyContextRetrievalStrategy
 from safety_strategies.base import SAFETY_SYSTEM_PROMPT
-from safety_strategies.qwen3guard import _parse_guard_output
+from safety_strategies.qwen3guard import (DEFAULT_GUARD_MODEL as QWEN3GUARD_MODEL,
+                                          _parse_guard_output)
 from safety_strategies.paraphrase import PARAPHRASE_PROMPT, PARAPHRASE_HELPER_MODEL
 from safety_strategies.backtranslation import (
     BACKTRANSLATION_PROMPT, BACKTRANSLATION_HELPER_MODEL,
@@ -51,24 +53,9 @@ DEFAULT_OUT     = REPO_ROOT / "data" / "adversarial" / "probe"
 # Merged probe input: 559 goals, 21 methods, 9,756 probes (goal + source per row).
 DEFAULT_INPUT   = REPO_ROOT / "data" / "adversarial" / "probe_input_merged.jsonl"
 
-QWEN3GUARD_MODEL = os.environ.get("QWEN3GUARD_MODEL",    "Qwen/Qwen3Guard-Gen-0.6B")
 QWEN3GUARD_BASE  = os.environ.get("QWEN3GUARD_BASE_URL", "http://localhost:8001/v1")
 # ASR_JUDGE_BASE/MODEL come from jailbreak_judge (single source of truth).
 
-LOCAL_TARGET_PORTS = {
-    # Qwen3 family (batch 1-2)
-    "Qwen/Qwen3-0.6B":     8002,
-    "Qwen/Qwen3-1.7B":     8003,
-    "Qwen/Qwen3-4B":       8004,
-    "Qwen/Qwen3-8B":       8005,
-    "Qwen/Qwen3-14B":      8006,
-    "Qwen/Qwen3-30B-A3B":  8007,
-    "Qwen/Qwen3-32B":      8008,
-    # Cross-family (batch 5-8)
-    "Qwen/Qwen3-Coder-Next-FP8":                                8013,
-    "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4":           8014,
-    "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4":     8015,
-}
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 REASONING_OFF = {

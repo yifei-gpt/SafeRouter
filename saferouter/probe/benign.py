@@ -13,7 +13,6 @@ from pathlib import Path
 
 import httpx
 
-HERE = Path(__file__).parent
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INPUT = REPO_ROOT / "data" / "benign" / "r2bench_queries.jsonl"
 OUT_DIR = REPO_ROOT / "data" / "benign" / "responses"

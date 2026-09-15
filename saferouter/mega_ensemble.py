@@ -11,11 +11,14 @@ from pathlib import Path
 
 import torch
 
-import train_saferouter as T
+from cost import COST_MATRIX
+from data_io import load_safety_data
+from evaluate import (OP_ASR_TARGET, ensemble_evaluate, ensemble_threshold_sweep,
+                      select_tau)
+from routers import load_fold_nets
 
 # The scalar test_* fields are written at τ* chosen on optval here, matching
 # run_kfold; the stored sweep rebuilds the full frontier.
-OP_ASR_TARGET = T.OP_ASR_TARGET
 
 
 def main():
@@ -26,14 +29,14 @@ def main():
     args = ap.parse_args()
     dev = args.device
 
-    adv_embs, keys, safety_tensor, probe_costs = T.load_safety_data()
+    adv_embs, keys, safety_tensor, probe_costs = load_safety_data()
     adv_embs = adv_embs.to(dev)
     safety_tensor = safety_tensor.to(dev)
     probe_costs = probe_costs.to(dev) if probe_costs is not None else None
 
     results, fi = [], 0
     while True:
-        nets, test_idx, optval_idx, dropped = T.load_fold_nets(
+        nets, test_idx, optval_idx, dropped = load_fold_nets(
             args.runs, fi, device=dev, verbose=True)
         if test_idx is None:                       # no run has this fold -> done
             break
@@ -41,13 +44,13 @@ def main():
             raise RuntimeError(f"fold {fi}: every net was non-finite — nothing to ensemble")
         print(f"fold {fi}: pooled {len(nets)} nets from {len(args.runs)} configs"
               + (f"  ({dropped} diverged net(s) dropped)" if dropped else ""))
-        sweep = T.ensemble_threshold_sweep(nets, adv_embs, safety_tensor, test_idx, T.COST_MATRIX,
+        sweep = ensemble_threshold_sweep(nets, adv_embs, safety_tensor, test_idx, COST_MATRIX,
                                             device=dev, probe_costs=probe_costs, use_cost_head=True)
-        opt_sweep = T.ensemble_threshold_sweep(nets, adv_embs, safety_tensor, optval_idx, T.COST_MATRIX,
+        opt_sweep = ensemble_threshold_sweep(nets, adv_embs, safety_tensor, optval_idx, COST_MATRIX,
                                                device=dev, probe_costs=probe_costs, use_cost_head=True)
         # τ* from OPTVAL at the a-priori target, then TEST read once at it (mirrors run_kfold).
-        tau_star = T.select_tau(opt_sweep, OP_ASR_TARGET, len(optval_idx))
-        ens = T.ensemble_evaluate(nets, adv_embs, safety_tensor, test_idx, T.COST_MATRIX,
+        tau_star = select_tau(opt_sweep, OP_ASR_TARGET, len(optval_idx))
+        ens = ensemble_evaluate(nets, adv_embs, safety_tensor, test_idx, COST_MATRIX,
                                   device=dev, probe_costs=probe_costs, safety_threshold=tau_star,
                                   use_cost_head=True)
         results.append({"fold": fi, "tau_star": tau_star,

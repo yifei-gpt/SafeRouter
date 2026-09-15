@@ -85,16 +85,13 @@ class BaseStrategy:
         self.client = client
         self.model = model
 
-    def _generate(self, query: str, max_tokens: int = 4096):
-        """Send `[system: SAFETY_SYSTEM_PROMPT, user: query]` to the target.
-
-        S1 (SCR) overrides this by building its own messages list with the
-        SCR template as the system prompt (replaces the baseline).
-        """
+    def _generate(self, query: str, max_tokens: int = 4096, system=SAFETY_SYSTEM_PROMPT):
+        """Send `[system, user: query]` to the target. S1 (SCR) passes its own
+        system prompt; everyone else gets the S0 safety prompt."""
         kwargs = dict(
             model=self.model,
             messages=[
-                {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
+                {"role": "system", "content": system},
                 {"role": "user", "content": query},
             ],
             max_tokens=max_tokens,

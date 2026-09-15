@@ -77,37 +77,20 @@ def parse_judge_output(text):
 # Load data (supports both JSON and JSONL)
 
 def load_responses(input_path):
-    """Load probing responses from JSON or JSONL file."""
+    """Records from a .jsonl file (one per line) or a .json list."""
     path = str(input_path)
-    if path.endswith(".jsonl"):
-        results = []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    results.append(json.loads(line))
-        return results
-    else:
+    if not path.endswith(".jsonl"):
         with open(path) as f:
             return json.load(f)
+    with open(path) as f:
+        return [json.loads(ln) for ln in f if ln.strip()]
 
 
 def load_judged(output_path):
-    """Load existing judged results for resume support."""
+    """Existing judged records for resume support, or None if there are none yet."""
     if not os.path.exists(output_path):
         return None
-    path = str(output_path)
-    if path.endswith(".jsonl"):
-        results = []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    results.append(json.loads(line))
-        return results
-    else:
-        with open(path) as f:
-            return json.load(f)
+    return load_responses(output_path)
 
 
 def save_judged(judged, output_path):

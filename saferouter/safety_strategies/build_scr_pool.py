@@ -14,7 +14,6 @@ import numpy as np
 import torch
 import pandas as pd
 
-SSROUTER_DIR = Path(__file__).resolve().parents[0]   # safety_strategies/
 ROOT = Path(__file__).resolve().parents[1]            # saferouter/
 
 

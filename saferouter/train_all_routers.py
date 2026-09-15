@@ -6,146 +6,29 @@ split from benign_split.
     python train_all_routers.py [--only mirt carrot]
 """
 import argparse
-import json
-from pathlib import Path
 
 import joblib
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 from sklearn.metrics import roc_auc_score, mean_squared_error
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import cross_val_score
 
-# Model pool and pricing come from cost/ so they cannot drift from
-# cost/price.json or from train_saferouter's view of the same pool.
-from cost import (JUDGED_FILES, MODELS, N_MODELS,
-                  RESPONSE_FILES)
-from cost import per_query_costs as cost_per_query
-
-# Configuration
-
-HERE = Path(__file__).parent
-DATA = HERE.parent / "data"
-JUDGED_DIR = DATA / "benign" / "judged"
-EMB_PATH = DATA / "embeddings" / "r2bench_28k_embeddings.pt"
-LLM_EMB = DATA / "embeddings" / "model_profile_embeddings.pt"
-CKPT_DIR = DATA / "checkpoints"
-CKPT_DIR.mkdir(parents=True, exist_ok=True)
+# The model pool comes from cost/ so it cannot drift from cost/price.json or from
+# train_saferouter's view of the same pool.
+from routers import BilinearMF, MIRTNet
+from data_io import CKPT_DIR, EMB_LLM, load_baseline_data
+from cost import MODELS, N_MODELS
 
 CORRECT_THR = 0.7
-
-# Response file mapping (for per-query token costs)
-RESPONSE_DIR = DATA / "benign" / "responses"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 SEED = 42
 
 
-# Data loading
 
-def load_data():
-    """Load 28K embeddings + judge scores for all models."""
-    print("Loading R2Bench 28K embeddings + judge labels...")
-    emb_data = torch.load(EMB_PATH, map_location="cpu", weights_only=False)
-    all_embs = emb_data["embeddings"]  # (28020, 1024)
-    q_id_list = emb_data["question_ids"]
-    q_id_to_idx = {str(qid): i for i, qid in enumerate(q_id_list)}
-
-    # Load judge scores per model (+ query text for the duplicate-aware split)
-    correctness = {}
-    query_text = {}
-    for m in MODELS:
-        fname = JUDGED_FILES[m]
-        fpath = JUDGED_DIR / fname
-        correctness[m] = {}
-        with open(fpath) as fh:
-            for line in fh:
-                r = json.loads(line)
-                qid = str(r["id"])
-                if r.get("judge_score") is not None:
-                    correctness[m][qid] = float(r["judge_score"])
-                    if qid not in query_text:
-                        query_text[qid] = r.get("query") or ""
-
-    # Intersect: queries that have scores for ALL models AND embeddings
-    qids = sorted(
-        set(q_id_to_idx.keys()) &
-        set.intersection(*(set(correctness[m].keys()) for m in MODELS))
-    )
-    N = len(qids)
-    print(f"  Queries with full model coverage: {N}")
-
-    emb_matrix = np.array([all_embs[q_id_to_idx[q]].numpy() for q in qids])
-    score_matrix = np.array([[correctness[m][q] for m in MODELS] for q in qids])
-
-    # Load per-query costs from response data (original CARROT uses actual token costs)
-    cost_matrix = np.zeros((N, N_MODELS), dtype=np.float32)
-    for mi, m in enumerate(MODELS):
-        fpath = RESPONSE_DIR / RESPONSE_FILES[m]
-        per_query_cost = cost_per_query(fpath, m, per_1000q=False)
-        for qi, qid in enumerate(qids):
-            if qid not in per_query_cost:
-                raise KeyError(
-                    f"Query {qid} has a judge score but no per-query cost in "
-                    f"{fpath.name} (missing/empty api_usage). Re-probe this query "
-                    f"or drop it from the judged set — no average-cost fallback by design.")
-            cost_matrix[qi, mi] = per_query_cost[qid]
-
-    # Group-aware split so duplicate query texts never straddle train/test (H5)
-    from benign_split import group_split_indices
-    train_idx, test_idx = group_split_indices(qids, query_text, test_frac=0.15)
-    print(f"  Total: {N}   train: {len(train_idx)}   test: {len(test_idx)}")
-    return {
-        "all_embs": all_embs,
-        "qids": qids,
-        "q_id_to_idx": q_id_to_idx,
-        "emb": emb_matrix,
-        "score": score_matrix,
-        "cost": cost_matrix,
-        "train_idx": train_idx,
-        "test_idx": test_idx,
-    }
-
-
-# Router 1 BilinearMF, matching RouteLLM: bias-free P + text_proj + classifier, dim=128.
-
-class BilinearMF(nn.Module):
-    def __init__(self, n_models=N_MODELS, dim=128, text_dim=1024):
-        super().__init__()
-        self.n_models = n_models
-        self.P = nn.Embedding(n_models, dim)
-        self.text_proj = nn.Linear(text_dim, dim, bias=False)
-        self.classifier = nn.Linear(dim, 1, bias=False)
-
-    def project_text(self, q_emb):
-        """Project raw embedding into latent routing space."""
-        if q_emb.dim() == 1:
-            q_emb = q_emb.unsqueeze(0)
-        return self.text_proj(q_emb)
-
-    def forward(self, model_win, model_loss, q_proj):
-        """Pairwise scoring on pre-projected embeddings."""
-        v_win = F.normalize(self.P(model_win), p=2, dim=-1)
-        v_loss = F.normalize(self.P(model_loss), p=2, dim=-1)
-        h = v_win - v_loss
-        if q_proj.dim() == 1:
-            q_proj = q_proj.unsqueeze(0)
-        interaction = h * q_proj
-        logit = self.classifier(interaction).squeeze(-1)
-        return logit
-
-    def score_all(self, q_proj):
-        """Return scores for all models given pre-projected embedding(s)."""
-        P_all = F.normalize(self.P.weight, p=2, dim=-1)  # (n_models, dim)
-        if q_proj.dim() == 1:
-            interaction = P_all * q_proj.unsqueeze(0)  # (n_models, dim)
-        else:
-            interaction = P_all.unsqueeze(0) * q_proj.unsqueeze(1)  # (batch, n_models, dim)
-        logits = self.classifier(interaction).squeeze(-1)
-        return logits
-
+# Router 1 BilinearMF, matching RouteLLM.
 
 class PairDataset(Dataset):
     def __init__(self, pairs, embs):
@@ -242,7 +125,7 @@ def train_bilinear_mf(data, *, save_path, epochs=30, lr=1e-3, batch_size=64, pat
     print(f"  Best val_pair_acc={best_acc*100:.1f}% → {save_path}")
 
 
-# Router 2 CARROT-KNN, matching the original: KNeighborsRegressor, cosine metric, tuned k.
+# Router 2 CARROT-KNN: KNeighborsRegressor, cosine metric, tuned k.
 
 def tune_n_neighbors(X_train, Y_train,
                      n_neighbors_range=(2, 4, 8, 16, 32, 64, 128, 256, 512),
@@ -322,62 +205,17 @@ def train_carrot_knn(data, *, save_path):
     print(f"  Saved → {save_path}")
 
 
-def carrot_route(carrot_bundle, X, lam=0.0):
-    """CARROT quality-cost routing:
-        model_idx = argmax_m [ (1-λ)·quality_pred_m − λ·zcost_pred_m ]
-
-    Blended in Z-SCORE space, where the 0-1 quality and unit-variance cost are
-    comparable and λ sweeps a smooth frontier. Do NOT de-normalize cost to
-    dollars here: benign costs are ~1e-3, ~1000x smaller than quality, which
-    leaves λ inert until it collapses all-or-nothing at λ→1. cost_mu/cost_std
-    stay in the bundle only for reporting realized $."""
-    quality_pred = carrot_bundle["knn_quality"].predict(X)
-    if lam == 0.0:
-        return quality_pred.argmax(axis=1)
-    z_cost_pred = carrot_bundle["knn_cost"].predict(X)   # already standardized
-    scores = (1 - lam) * quality_pred - lam * z_cost_pred
-    return scores.argmax(axis=1)
-
-
-def load_mirt(ckpt_dir=None, device=DEVICE):
-    """The trained IRT-Router plus the model-profile matrix it scores against."""
-    net = MIRTNet().to(device).eval()
-    net.load_state_dict(torch.load(Path(ckpt_dir or CKPT_DIR) / "mirt.pt",
-                                   map_location=device, weights_only=False))
-    prof = torch.load(LLM_EMB, map_location="cpu", weights_only=False)
-    return net, torch.stack([prof[m] for m in MODELS]).float().to(device)
-
-
 @torch.no_grad()
-def irt_quality(net, llm, x):
-    """P(correct) for every model -> (batch, n_models)."""
-    return torch.stack([net(llm[i].expand(len(x), -1), x) for i in range(N_MODELS)], 1)
-
-
-# Router 3 MIRT, matching IRT-Router: sigmoid(sum(a*theta) - b), a = softplus(a_proj(q)),
-
-class MIRTNet(nn.Module):
-    def __init__(self, llm_dim=1024, query_dim=1024, latent=25):
-        super().__init__()
-        self.theta_proj = nn.Linear(llm_dim, latent, bias=False)
-        self.a_proj = nn.Linear(query_dim, latent, bias=False)
-        self.b_proj = nn.Linear(query_dim, 1, bias=False)
-
-    def forward(self, llm_emb, query_emb):
-        theta = self.theta_proj(llm_emb)
-        a = F.softplus(self.a_proj(query_emb))
-        b = self.b_proj(query_emb).squeeze(-1)
-        return torch.sigmoid((a * theta).sum(-1) - b)
-
+# Router 3 MIRT, matching IRT-Router.
 
 def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
     torch.manual_seed(SEED); torch.cuda.manual_seed_all(SEED)  # deterministic init + shuffle order
     print(f"\n{'='*60}\nTraining MIRT\n{'='*60}")
-    llm_dict = torch.load(LLM_EMB, map_location="cpu", weights_only=False)
+    llm_dict = torch.load(EMB_LLM, map_location="cpu", weights_only=False)
     llm_M = torch.stack([llm_dict[m] for m in MODELS]).to(DEVICE)  # (N_MODELS, 1024)
     Q_emb = data["all_embs"].to(DEVICE)
 
-    # Checkpoints selected on a train-internal val split; test is held out entirely.
+    # Checkpoints selected on a train-internal val split; test held out entirely.
     vrng = np.random.RandomState(SEED + 9973)
     perm = vrng.permutation(len(data["train_idx"]))
     n_val = max(1, int(0.15 * len(data["train_idx"])))
@@ -432,7 +270,7 @@ def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
                 truths.extend(s.cpu().tolist())
         preds, truths = np.array(preds), np.array(truths)
         try:
-            # AUC of continuous preds vs the 0.5-binarized label (reference MIRT binarizes both).
+            # AUC of continuous preds vs the 0.5-binarized label (reference binarizes both).
             auc = float(roc_auc_score(truths >= 0.5, preds))
         except ValueError:   # only one class present → AUC undefined
             auc = 0.5
@@ -458,7 +296,7 @@ def main():
     args = ap.parse_args()
     selected = args.only or ["bimf", "carrot", "mirt"]
 
-    data = load_data()
+    data = load_baseline_data()
 
     if "bimf" in selected:
         (CKPT_DIR / "router").mkdir(exist_ok=True, parents=True)

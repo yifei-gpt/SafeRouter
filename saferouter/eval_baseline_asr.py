@@ -19,9 +19,9 @@ import joblib
 import numpy as np
 import torch
 
-from train_all_routers import (CKPT_DIR, MODELS, N_MODELS, BilinearMF, carrot_route,
-                               irt_quality, load_mirt)
-from train_saferouter import load_safety_data
+from cost import MODELS, N_MODELS
+from data_io import CKPT_DIR, load_safety_data
+from routers import BilinearMF, carrot_route, irt_quality, load_mirt
 
 S0_COMPOSITE = 0
 
@@ -47,9 +47,9 @@ def route_bimf(embs, device):
     return scores.argmax(dim=-1).cpu().numpy()
 
 
-def route_carrot(embs, device):
+def route_carrot(embs, _device):   # CARROT is sklearn: CPU only
     bundle = joblib.load(CKPT_DIR / "carrot_knn.joblib")
-    return carrot_route(bundle, embs.numpy(), lam=0.0)
+    return carrot_route(bundle, embs.numpy())
 
 
 def route_mirt(embs, device):

@@ -9,7 +9,8 @@ import json
 import sys
 from pathlib import Path
 
-import generate_attacks as ga  # reuse the exact generators + proxy mgmt
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from attacks import generate_attacks as ga   # the exact generators + proxy mgmt
 
 REPO = Path(__file__).resolve().parents[2]
 PROBE_INPUT = REPO / "data" / "adversarial" / "probe_input_merged.jsonl"

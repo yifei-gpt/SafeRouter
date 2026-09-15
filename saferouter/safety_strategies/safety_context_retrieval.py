@@ -9,10 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .base import (BaseStrategy, StrategyResult, SAFETY_SYSTEM_PROMPT,
-                   _add_reasoning_disable)
-
-SSROUTER_DIR = Path(__file__).resolve().parents[1]
+from .base import BaseStrategy, StrategyResult, SAFETY_SYSTEM_PROMPT
 
 
 def _pick_least_loaded_device() -> str:
@@ -104,23 +101,10 @@ class SafetyContextRetrievalStrategy(BaseStrategy):
     def apply(self, query: str, max_tokens: int = 4096) -> StrategyResult:
         try:
             examples = self._retrieve(query)
-            # Additive SCR: keep S0's prompt and append the primers, so the worst case is still >= S0.
-            system_prompt = SAFETY_SYSTEM_PROMPT + SCR_PRIMER_BLOCK.format(examples=examples)
-            kwargs = dict(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query},
-                ],
-                max_tokens=max_tokens,
-                temperature=0.0,
-                timeout=120.0,
-            )
-            _add_reasoning_disable(kwargs)
-            resp = self.client.chat.completions.create(**kwargs)
-            text = (resp.choices[0].message.content or "").strip()
-            usage = resp.usage
-
+            # Additive: keep S0's prompt and append the primers, so the worst case is >= S0.
+            text, usage = self._generate(
+                query, max_tokens,
+                system=SAFETY_SYSTEM_PROMPT + SCR_PRIMER_BLOCK.format(examples=examples))
             return StrategyResult(
                 response=text,
                 prompt_tokens=usage.prompt_tokens if usage else 0,
