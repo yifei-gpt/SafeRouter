@@ -9,6 +9,7 @@ from cost import MODELS, N_MODELS
 from routers import MIRTNet
 from utils.data_io import EMB_LLM
 from training import DEVICE, SEED
+from training.loop import fit
 
 
 def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
@@ -50,27 +51,16 @@ def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
     optim = torch.optim.Adam(model.parameters(), lr=lr)  # no weight decay (matches original)
     loss_fn = nn.BCELoss()
 
-    best_auc, pat = 0.0, 0
-    for ep in range(1, epochs + 1):
-        model.train()
-        tloss, nb = 0, 0
-        for mi, qi, s in tr_ldr:
-            mi, qi, s = mi.to(DEVICE), qi.to(DEVICE), s.to(DEVICE)
-            pred = model(llm_M[mi], Q_emb[qi])
-            loss = loss_fn(pred, s)
-            optim.zero_grad()
-            loss.backward()
-            optim.step()
-            tloss += loss.item()
-            nb += 1
+    def step(batch):
+        mi, qi, s = (x.to(DEVICE) for x in batch)
+        return loss_fn(model(llm_M[mi], Q_emb[qi]), s)
 
-        model.eval()
+    def validate(loader):
         preds, truths = [], []
-        with torch.no_grad():
-            for mi, qi, s in val_ldr:
-                mi, qi, s = mi.to(DEVICE), qi.to(DEVICE), s.to(DEVICE)
-                preds.extend(model(llm_M[mi], Q_emb[qi]).cpu().tolist())
-                truths.extend(s.cpu().tolist())
+        for batch in loader:
+            mi, qi, s = (x.to(DEVICE) for x in batch)
+            preds.extend(model(llm_M[mi], Q_emb[qi]).cpu().tolist())
+            truths.extend(s.cpu().tolist())
         preds, truths = np.array(preds), np.array(truths)
         try:
             # AUC of continuous preds vs the 0.5-binarized label.
@@ -78,13 +68,7 @@ def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
         except ValueError:   # only one class present → AUC undefined
             auc = 0.5
         rmse = float(np.sqrt(mean_squared_error(truths, preds)))
-        print(f"  ep={ep:3d}  tr_loss={tloss/nb:.4f}  val_rmse={rmse:.4f}  val_auc={auc:.4f}")
-        if auc > best_auc:
-            best_auc, pat = auc, 0
-            torch.save(model.state_dict(), save_path)
-        else:
-            pat += 1
-            if pat >= patience:
-                print(f"  early stop ep={ep}")
-                break
+        return auc, f"val_rmse={rmse:.4f}  val_auc={auc:.4f}"
+
+    best_auc = fit(model, optim, tr_ldr, val_ldr, step, validate, save_path, epochs, patience)
     print(f"  Best auc={best_auc:.4f} → {save_path}")

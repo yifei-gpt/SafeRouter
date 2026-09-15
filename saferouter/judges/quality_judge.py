@@ -239,6 +239,54 @@ class VLLMJudge:
 
 # Process a single response file (with pre-loaded judge)
 
+def make_judge(args):
+    """The local vLLM judge, configured from the CLI."""
+    return VLLMJudge(args.judge_model, tp_size=args.tp, gpu_mem=args.gpu_mem,
+                     max_model_len=args.max_model_len, max_tokens=args.max_tokens)
+
+
+def prepare_file(input_path, output_path, resume):
+    """Load one response file and work out what is still unjudged.
+
+    -> (results, judged, entries), or (results, judged, None) when every row is
+    already scored. Duplicate texts carry conflicting goldens, so the goldens are
+    canonicalized first.
+    """
+    results = load_responses(input_path)
+    canonicalize_goldens(results)
+    judged = load_judged(output_path) if resume else None
+    if judged is None:
+        judged = init_judged(results)
+    entries = collect_pending(results, judged)
+    if not entries:
+        scored = sum(1 for j in judged if j.get("judge_score") is not None)
+        print(f"Nothing to judge. {scored}/{len(judged)} already scored.")
+        return results, judged, None
+    print(f"Entries to judge: {len(entries)}")
+    return results, judged, entries
+
+
+def finish_file(judged, indices, judge_results, output_path):
+    """Merge the judge's scores back in, save, and print the tally."""
+    for idx, jr in zip(indices, judge_results):
+        if jr is not None:
+            judged[idx]["judge_score"] = jr["judge_score"]
+            judged[idx]["judge_raw"] = jr["judge_raw"]
+    save_judged(judged, output_path)
+
+    scored = sum(1 for j in judged if j.get("judge_score") is not None)
+    scores = [j["judge_score"] for j in judged if j.get("judge_score") is not None]
+    parse_failures = sum(1 for j in judged
+                         if j.get("judge_raw") and j.get("judge_score") is None
+                         and not j["judge_raw"].startswith("[ERROR"))
+    print(f"\nResults: {scored}/{len(judged)} judged, "
+          f"avg score: {sum(scores)/len(scores) if scores else 0:.3f}")
+    if parse_failures:
+        print(f"  Parse failures: {parse_failures} (judge returned text, no score)")
+    print(f"Saved to {output_path}")
+    return judged
+
+
 def process_file(input_path, output_path, judge, batch_size=256, resume=False):
     """Judge all responses in a single file using a pre-loaded judge."""
     print(f"\n{'='*60}")
@@ -246,46 +294,12 @@ def process_file(input_path, output_path, judge, batch_size=256, resume=False):
     print(f"Output:     {output_path}")
     print(f"{'='*60}")
 
-    results = load_responses(input_path)
-    # Duplicate texts carry conflicting goldens: one canonical per text.
-    canonicalize_goldens(results)
-    judged = load_judged(output_path) if resume else None
-
-    if judged is None:
-        judged = init_judged(results)
-
-    entries = collect_pending(results, judged)
-
-    if not entries:
-        scored = sum(1 for j in judged if j.get("judge_score") is not None)
-        print(f"Nothing to judge. {scored}/{len(judged)} already scored.")
+    _, judged, entries = prepare_file(input_path, output_path, resume)
+    if entries is None:
         return judged
 
-    print(f"Entries to judge: {len(entries)}")
-
     indices, judge_results = judge.judge(entries, batch_size=batch_size)
-
-    # Merge results
-    for idx, jr in zip(indices, judge_results):
-        if jr is not None:
-            judged[idx]["judge_score"] = jr["judge_score"]
-            judged[idx]["judge_raw"] = jr["judge_raw"]
-
-    # Save
-    save_judged(judged, output_path)
-
-    # Stats
-    scored = sum(1 for j in judged if j.get("judge_score") is not None)
-    scores = [j["judge_score"] for j in judged if j.get("judge_score") is not None]
-    avg_score = sum(scores) / len(scores) if scores else 0
-    parse_failures = sum(1 for j in judged
-                         if j.get("judge_raw") and j.get("judge_score") is None
-                         and not j["judge_raw"].startswith("[ERROR"))
-    print(f"\nResults: {scored}/{len(judged)} judged, avg score: {avg_score:.3f}")
-    if parse_failures:
-        print(f"  Parse failures: {parse_failures} (judge returned text but score couldn't be extracted)")
-    print(f"Saved to {output_path}")
-
+    finish_file(judged, indices, judge_results, output_path)
     return judged
 
 
@@ -419,14 +433,7 @@ def main():
         if not pending:
             print("  Nothing to judge — all rows already scored.")
         else:
-            # Load judge model locally via vLLM
-            judge = VLLMJudge(
-                args.judge_model,
-                tp_size=args.tp,
-                gpu_mem=args.gpu_mem,
-                max_model_len=args.max_model_len,
-                max_tokens=args.max_tokens,
-            )
+            judge = make_judge(args)
 
             # Canonical reject sentinel emitted when a defense blocks a response.
             REJECT_SENTINEL = "Sorry, I CANNOT assist with that."
@@ -540,14 +547,7 @@ def main():
     print(f"Files to process: {len(files_to_process)}")
 
     if args.backend == "vllm":
-        # Load model ONCE, process all files
-        judge = VLLMJudge(
-            args.judge_model,
-            tp_size=args.tp,
-            gpu_mem=args.gpu_mem,
-            max_model_len=args.max_model_len,
-            max_tokens=args.max_tokens,
-        )
+        judge = make_judge(args)   # loaded once, reused across every file
 
         for input_path, output_path in files_to_process:
             process_file(input_path, output_path, judge,
@@ -562,19 +562,9 @@ def main():
             print(f"Processing: {input_path}")
             print(f"{'='*60}")
 
-            results = load_responses(input_path)
-            canonicalize_goldens(results)  # H5: canonical golden per query text
-            judged = load_judged(output_path) if args.resume else None
-            if judged is None:
-                judged = init_judged(results)
-
-            entries = collect_pending(results, judged)
-            if not entries:
-                scored = sum(1 for j in judged if j.get("judge_score") is not None)
-                print(f"Nothing to judge. {scored}/{len(judged)} already scored.")
+            _, judged, entries = prepare_file(input_path, output_path, args.resume)
+            if entries is None:
                 continue
-
-            print(f"Entries to judge: {len(entries)}")
 
             import asyncio
             import httpx
@@ -654,19 +644,7 @@ def main():
                 return all_results
 
             all_results = asyncio.run(run_server_judge())
-            indices = [idx for idx, _ in entries]
-
-            for idx, jr in zip(indices, all_results):
-                if jr is not None:
-                    judged[idx]["judge_score"] = jr["judge_score"]
-                    judged[idx]["judge_raw"] = jr["judge_raw"]
-
-            save_judged(judged, output_path)
-
-            scored = sum(1 for j in judged if j.get("judge_score") is not None)
-            scores = [j["judge_score"] for j in judged if j.get("judge_score") is not None]
-            avg_score = sum(scores) / len(scores) if scores else 0
-            print(f"Results: {scored}/{len(judged)} judged, avg score: {avg_score:.3f}")
+            finish_file(judged, [idx for idx, _ in entries], all_results, output_path)
 
     print("\nAll done.")
 

@@ -493,7 +493,6 @@ def run_timing(methods, goals, workers):
               % ("method", "status", "per-goal", "x476 (1proc)", "x476 (/%d)" % workers, "kind"))
     print(header)
     print("-" * len(header))
-    wb_total_1proc = 0.0
     for method in methods:
         r = results.get(method, {})
         st = r.get("status", "?")
@@ -503,7 +502,6 @@ def run_timing(methods, goals, workers):
             kind = "white-box" if method in WHITE_BOX else "cpu/api"
             if method in WHITE_BOX:
                 x476_par = x476 / workers
-                wb_total_1proc += x476
             else:
                 x476_par = x476  # cpu/api not GPU-sharded the same way
             print("%-13s %-12s %9.2fs %11.0fs %13.0fs %14s"

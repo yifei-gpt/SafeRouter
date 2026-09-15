@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from cost import N_MODELS
 from routers import BilinearMF
 from training import CORRECT_THR, DEVICE, SEED
+from training.loop import fit
 
 
 class PairDataset(Dataset):
@@ -67,38 +68,23 @@ def train_bilinear_mf(data, *, save_path, epochs=30, lr=1e-3, batch_size=64, pat
     optim = torch.optim.Adam(model.parameters(), lr=lr)
     bce = nn.BCEWithLogitsLoss()
 
-    best_acc, pat = 0.0, 0
-    for ep in range(1, epochs + 1):
-        model.train()
-        tloss, nb = 0, 0
-        for emb, w, l in tr_ldr:
-            emb, w, l = emb.to(DEVICE), w.to(DEVICE), l.to(DEVICE)
-            q_proj = model.project_text(emb)
-            logit = model(w, l, q_proj)
-            loss = bce(logit, torch.ones_like(logit))
-            optim.zero_grad()
-            loss.backward()
-            optim.step()
-            tloss += loss.item()
-            nb += 1
+    def logits(batch):
+        emb, w, l = (x.to(DEVICE) for x in batch)
+        return model(w, l, model.project_text(emb))
 
-        model.eval()
-        correct, total = 0, 0
-        with torch.no_grad():
-            for emb, w, l in val_ldr:
-                emb, w, l = emb.to(DEVICE), w.to(DEVICE), l.to(DEVICE)
-                q_proj = model.project_text(emb)
-                logit = model(w, l, q_proj)
-                correct += (logit > 0).sum().item()
-                total += len(logit)
+    def step(batch):
+        logit = logits(batch)
+        return bce(logit, torch.ones_like(logit))
+
+    def validate(loader):
+        # The winner must outrank the loser, so a correct pair is logit > 0.
+        correct = total = 0
+        for batch in loader:
+            logit = logits(batch)
+            correct += (logit > 0).sum().item()
+            total += len(logit)
         acc = correct / max(total, 1)
-        print(f"  ep={ep:3d}  tr_loss={tloss/nb:.4f}  val_pair_acc={acc*100:.1f}%")
-        if acc > best_acc:
-            best_acc, pat = acc, 0
-            torch.save(model.state_dict(), save_path)
-        else:
-            pat += 1
-            if pat >= patience:
-                print(f"  early stop ep={ep}")
-                break
+        return acc, f"val_pair_acc={acc*100:.1f}%"
+
+    best_acc = fit(model, optim, tr_ldr, val_ldr, step, validate, save_path, epochs, patience)
     print(f"  Best val_pair_acc={best_acc*100:.1f}% → {save_path}")
