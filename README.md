@@ -49,10 +49,14 @@ saferouter/
     evaluate.py          ASR/cost scoring, the threshold sweep, the τ* rule
     embed.py             Qwen3-Embedding-0.6B encoder
     benign_split.py      group-aware split (duplicate texts never straddle)
-  train_saferouter.py    training the router: losses, k-fold, τ* selection
-  train_all_routers.py   baselines: RouteLLM · CARROT-KNN · IRT-Router
-  eval_baseline_asr.py   those baselines' ASR/cost on the adversarial probes
-  mega_ensemble.py       pool per-fold nets across runs → honest frontier
+  training/              one file per trainable router
+    saferouter.py        losses, k-fold, τ* selection
+    bilinear_mf.py       RouteLLM
+    carrot_knn.py        CARROT
+    mirt.py              IRT-Router
+    ensemble.py          pool per-fold nets across runs → honest frontier
+  train.py               train.py {saferouter | baselines | ensemble}
+  eval.py                ASR/cost for every router on the adversarial probes
   cost/                  pricing + per-probe cost tensor from actual token counts
   probe/                 adversarial / benign / benign-defense probe drivers
   safety_strategies/     the 7 defenses S0–S6
@@ -69,8 +73,9 @@ bash scripts/train.sh                     # 3 configs × 6 seeds → an 18-net e
 ```
 
 Reads the embeddings, cost tensor and labels under `data/`; no GPU serving or API
-keys. Baselines: `python train_all_routers.py`, then `python eval_baseline_asr.py`
-for their ASR and cost — they pick a model only, so every query scores at ('s0','s0').
+keys. Baselines: `python train.py baselines`. Then `python eval.py` scores every
+router on the probes — the baselines pick a model only, so they land at ('s0','s0'),
+while SafeRouter picks a cell out of 160 at each fold's τ*.
 
 ## Routing a query
 

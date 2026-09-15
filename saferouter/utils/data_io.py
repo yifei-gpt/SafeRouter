@@ -87,11 +87,12 @@ def load_safety_data():
 
     return embs, keys, safety, probe_costs
 
-def load_benign_data(per_1000q=True, strict_costs=False):
+def load_benign_data(per_1000q=True, strict_costs=False, dtype=torch.float32):
     """-> embs (N,1024), qids, quality (N,M) at S0, costs (N,M), train_idx, test_idx,
     over the queries every model judged. costs are $/1000q, or $/query with
     per_1000q=False; strict_costs raises on a query with no recorded api_usage
-    instead of falling back to the model's average."""
+    instead of falling back to the model's average. dtype float64 keeps the judge
+    scores exactly as recorded -- k-NN ties at CORRECT_THR turn on the last bits."""
     d = torch.load(EMB_BEN, map_location="cpu", weights_only=False)
     embs = d["embeddings"].float()
     qids = d["question_ids"]
@@ -121,8 +122,8 @@ def load_benign_data(per_1000q=True, strict_costs=False):
     )
     N = len(valid_qids)
 
-    quality = torch.zeros(N, N_MODELS)
-    ben_costs = torch.zeros(N, N_MODELS)
+    quality = torch.zeros(N, N_MODELS, dtype=dtype)
+    ben_costs = torch.zeros(N, N_MODELS, dtype=dtype)
     emb_indices = []
     for i, q in enumerate(valid_qids):
         emb_indices.append(qid_to_idx[q])
@@ -160,7 +161,7 @@ def load_baseline_data():
     table the baselines index by question id. A missing cost is fatal here rather
     than averaged over."""
     embs, qids, quality, costs, train_idx, test_idx = load_benign_data(
-        per_1000q=False, strict_costs=True)
+        per_1000q=False, strict_costs=True, dtype=torch.float64)
     raw = torch.load(EMB_BEN, map_location="cpu", weights_only=False)
     return {"all_embs": raw["embeddings"],
             "q_id_to_idx": {str(q): i for i, q in enumerate(raw["question_ids"])},

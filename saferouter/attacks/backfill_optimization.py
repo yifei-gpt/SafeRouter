@@ -35,8 +35,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-# The attack templates have one definition; drifting them would silently
-# change what the backfilled prompts are.
+# One definition per template: a drift silently changes the prompts.
 from attacks.generate_attacks import ARTPROMPT_REWRITE_TEMPLATE, GPT4CIPHER_TEMPLATE
 
 # Constants

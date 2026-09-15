@@ -187,3 +187,16 @@ def ensemble_threshold_sweep(nets, adv_embs, safety_tensor, adv_indices,
                                safety_threshold=t, use_cost_head=use_cost_head)
         results.append((t, res["asr"], res["avg_realized_cost"]))
     return results
+
+
+def pooled_micro(folds):
+    """Pool per-fold test reads into one number per metric.
+
+    Folds differ in size (1,677 vs 1,117 probes here), so cost is weighted by
+    probe count -- the same convention as the micro ASR it is printed beside.
+    -> (asr, $/1000q, jailbroken, n).
+    """
+    jb = sum(f["test_jb"] for f in folds)
+    n = sum(f["test_total"] for f in folds)
+    cost = sum(f["test_realized_cost"] * f["test_total"] for f in folds) / n
+    return jb / n, cost, jb, n

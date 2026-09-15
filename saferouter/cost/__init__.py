@@ -42,8 +42,7 @@ SHORT_TO_FULL = {
 }
 FULL_TO_SHORT = {v: k for k, v in SHORT_TO_FULL.items()}
 
-# probe/ names every file after the full model id, so both filename tables
-# derive rather than being another list to keep in sync.
+# probe/ names every file after the full model id, so both tables derive.
 RESPONSE_FILES = {m: SHORT_TO_FULL[m].replace("/", "_").replace(".", "_").lower()
                      + "_r2bench.jsonl" for m in MODELS}
 JUDGED_FILES = {m: SHORT_TO_FULL[m].replace("/", "_").replace(".", "_").lower()
@@ -122,13 +121,10 @@ def call_cost(model_id, in_tok, out_tok):
     return (in_tok * p[0] + out_tok * p[1]) / 1e6
 
 
-# ---- Static routing cost matrix ($/1000q per (model, composite)) ----
-# A prior for cheap-first ORDERING only; every reported dollar comes from
-# the realized per-probe tensor, not from here.
+# ---- Static cost matrix ($/1000q): cheap-first ORDERING only ----
 import torch  # noqa: E402
 
 # Helper costs ($/1000q), token counts measured from probe data.
-# Llama-3.3-70B paraphrase: measured avg 289 input + 175 output tokens
 PARA_ABS_COST = (289 * 0.10 + 175 * 0.32) / 1e6 * 1e3    # $0.0849/1000q
 # S4 gpt-4o-mini harm judge: 326 in + 1.5 out. S5 pays it twice.
 S4_ABS_COST = (326 * 0.15 + 1.5 * 0.60) / 1e6 * 1e3      # $0.0490/1000q

@@ -4,8 +4,7 @@ Every caller must pass the same qid list.
 """
 import numpy as np
 
-# Single source of truth: train_saferouter and train_all_routers must split
-# identically or their test sets diverge and the comparison is meaningless.
+# Every trainer must split identically, or the comparison is meaningless.
 SPLIT_SEED = 42
 
 
