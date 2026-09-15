@@ -1,0 +1,138 @@
+{
+  "description": "Verified model pricing from OpenRouter (April 2026), extended May 2026 with Qwen3 family + helpers/judges used by SafeRouter.",
+  "unit": "$/M tokens",
+  "models": {
+    "qwen3-0.6b": {
+      "provider": "extrapolated below Novita 4B rate",
+      "model_id": "Qwen/Qwen3-0.6B",
+      "input": 0.01,
+      "output": 0.01
+    },
+    "qwen3-1.7b": {
+      "provider": "extrapolated below Novita 4B rate",
+      "model_id": "Qwen/Qwen3-1.7B",
+      "input": 0.02,
+      "output": 0.02
+    },
+    "qwen3-4b": {
+      "provider": "Novita",
+      "model_id": "Qwen/Qwen3-4B",
+      "input": 0.03,
+      "output": 0.03
+    },
+    "qwen3-8b": {
+      "provider": "AtlasCloud (cheapest on OpenRouter)",
+      "model_id": "qwen/qwen3-8b",
+      "input": 0.05,
+      "output": 0.40
+    },
+    "qwen3-14b": {
+      "provider": "NextBit (cheapest on OpenRouter)",
+      "model_id": "qwen/qwen3-14b",
+      "input": 0.06,
+      "output": 0.24
+    },
+    "qwen3-30b-a3b": {
+      "provider": "Novita / DeepInfra (tied cheapest on OpenRouter)",
+      "model_id": "qwen/qwen3-30b-a3b",
+      "input": 0.09,
+      "output": 0.45
+    },
+    "qwen3-32b": {
+      "provider": "Chutes (cheapest on OpenRouter)",
+      "model_id": "qwen/qwen3-32b",
+      "input": 0.08,
+      "output": 0.24
+    },
+    "qwen3guard-0.6b": {
+      "provider": "Alibaba (local vLLM)",
+      "model_id": "Qwen/Qwen3Guard-Gen-0.6B",
+      "input": 0.02,
+      "output": 0.05
+    },
+    "llama-3.3-70b-instruct": {
+      "provider": "DeepInfra (cheapest on OpenRouter)",
+      "model_id": "meta-llama/llama-3.3-70b-instruct",
+      "input": 0.10,
+      "output": 0.32
+    },
+    "gpt-4o-mini": {
+      "provider": "OpenAI (OpenRouter)",
+      "model_id": "openai/gpt-4o-mini",
+      "input": 0.15,
+      "output": 0.60
+    },
+    "deepseek-v4-flash": {
+      "provider": "DeepSeek (OpenRouter)",
+      "model_id": "deepseek/deepseek-v4-flash",
+      "input": 0.14,
+      "output": 0.28
+    },
+    "qwen3.5-122b-a10b": {
+      "provider": "Alibaba (OpenRouter, cheapest)",
+      "model_id": "qwen/qwen3.5-122b-a10b",
+      "input": 0.26,
+      "output": 2.08
+    },
+    "llama-8b": {
+      "provider": "Meta",
+      "model_id": "meta-llama/llama-3.1-8b-instruct",
+      "input": 0.03,
+      "output": 0.04
+    },
+    "qwen3.5-2b": {
+      "provider": "Alibaba",
+      "model_id": "qwen/qwen3.5-2b",
+      "input": 0.02,
+      "output": 0.10
+    },
+    "qwen3.5-9b": {
+      "provider": "Alibaba",
+      "model_id": "qwen/qwen3.5-9b",
+      "input": 0.10,
+      "output": 0.15
+    },
+    "phi4-14b": {
+      "provider": "Microsoft",
+      "model_id": "microsoft/phi-4",
+      "input": 0.065,
+      "output": 0.14
+    },
+    "gemma4-26b": {
+      "provider": "Google",
+      "model_id": "google/gemma-4-26b-a4b-it",
+      "input": 0.06,
+      "output": 0.33
+    },
+    "gemma4-31b": {
+      "provider": "Google (OpenRouter)",
+      "model_id": "google/gemma-4-31b-it",
+      "input": 0.12,
+      "output": 0.37
+    },
+    "qwen3.5-27b": {
+      "provider": "Alibaba",
+      "model_id": "qwen/qwen3.5-27b",
+      "input": 0.195,
+      "output": 1.56
+    },
+    "nemotron-3-super-120b": {
+      "provider": "OpenRouter",
+      "model_id": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+      "input": 0.09,
+      "output": 0.45
+    },
+    "nemotron-3-nano-30b": {
+      "provider": "OpenRouter",
+      "model_id": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
+      "input": 0.05,
+      "output": 0.20
+    },
+    "qwen3-coder-next": {
+      "provider": "OpenRouter",
+      "model_id": "Qwen/Qwen3-Coder-Next-FP8",
+      "input": 0.11,
+      "output": 0.80
+    }
+  }
+}

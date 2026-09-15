@@ -1,0 +1,52 @@
+# ============================================================================
+# SafeRouter — requirements.  python >= 3.10  (tested 3.10.19)
+#
+#   bash scripts/install.sh          # this file + GPU check + PandaGuard
+#   pip install -r requirements.txt  # by hand
+#
+# One pass, not torch-first: vllm pins torch tightly.
+#
+# Then verify the GPU. A wheel built for a newer CUDA than your driver installs
+# cleanly and only fails at runtime:
+#   python -c "import torch; print(torch.cuda.is_available())"
+# If False, --extra-index-url will NOT help -- it only adds an index while pip
+# still takes the highest version, i.e. the same wheel. Re-pin the pair:
+#   CUDA 12.x  pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 vllm==0.19.1
+#   other      https://pytorch.org/get-started/locally/
+# Paper used torch 2.11.0+cu130 on B200 / L4; any >=2.4 build reproduces it.
+# ============================================================================
+
+# --- core: train + evaluate from data/ ------------------------------------
+torch>=2.4                    # tested 2.11.0
+numpy>=1.24,<3                # tested 2.2.6
+scipy>=1.10                   # tested 1.15.3   Clopper-Pearson bound in select_tau()
+scikit-learn>=1.3             # tested 1.7.2    CARROT k-NN baseline
+joblib>=1.3                   # tested 1.5.3    baseline checkpoint I/O
+
+# --- re-embed / rebuild the SCR pool ----------------------------------------
+#     embed.py · safety_strategies/build_scr_pool.py
+transformers>=4.40            # tested 5.8.1    Qwen3-Embedding-0.6B encoder
+sentence-transformers>=3.0    # tested 5.4.1    SCR pool encoder
+pandas>=2.0                   # tested 2.3.3    WildJailbreak TSV loading
+tqdm>=4.65                    # tested 4.67.3
+
+# --- collect probes + judge -------------------------------------------------
+#     probe/*.py · judges/*.py — needs OPENROUTER_API_KEY (and OPENAI_API_KEY
+#     for the S4/S5 inline judges).
+openai>=1.40                  # tested 2.24.0   OpenAI-compatible client (also OpenRouter)
+httpx>=0.27                   # tested 0.28.1
+nltk>=3.8                     # tested 3.10.3   BLEU for S6 / PARDEN
+
+# --- local model serving ----------------------------------------------------
+#     scripts/start_local.sh · quality_judge.py. GPU + Linux only, so the marker
+#     skips it elsewhere rather than failing the whole install; on those
+#     machines route every model through the API instead.
+vllm>=0.6; sys_platform == "linux"        # tested 0.21.0
+
+# --- regenerating attack prompts --------------------------------------------
+#     attacks/*.py. Deliberately not a requirement: PandaGuard is read by path as
+#     PANDA_GUARD_ROOT = <SafeRouter>/../panda-guard, so it has to be a sibling
+#     source clone, not a wheel. scripts/install.sh does it; by hand:
+#       git clone https://github.com/Beijing-AISI/panda-guard.git ../panda-guard
+#       pip install -e ../panda-guard
+#     Pulls datasets/anthropic/google-generativeai and pins protobuf <6; expected.

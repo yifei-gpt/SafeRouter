@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+
+# Data: the attack/goal inputs are committed; model responses, judgements,
+# embeddings and the probe outcome tensors are too large and are rebuilt.
+data/**
+!data/**/
+!data/attacks/**
+!data/adversarial/*.jsonl
+!data/benign/defense_quality_cost.json
+!data/embeddings/adversarial_cost_tensor.pt
+!data/embeddings/model_profile_embeddings.pt
+!data/checkpoints/mirt.pt
+!data/checkpoints/router/quality_router.pt
+
+# Cluster logs / secrets
+*.out
+*.err
+.env
