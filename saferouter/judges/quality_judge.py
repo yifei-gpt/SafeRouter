@@ -13,6 +13,7 @@ import re
 import gc
 from pathlib import Path
 from tqdm import tqdm
+from utils.benign_split import canonicalize_goldens
 
 # Judge prompt for benign / ground-truth-based scoring
 
@@ -246,8 +247,7 @@ def process_file(input_path, output_path, judge, batch_size=256, resume=False):
     print(f"{'='*60}")
 
     results = load_responses(input_path)
-    # Duplicate query texts carry conflicting goldens: one canonical golden per text.
-    from benign_split import canonicalize_goldens
+    # Duplicate texts carry conflicting goldens: one canonical per text.
     canonicalize_goldens(results)
     judged = load_judged(output_path) if resume else None
 
@@ -378,7 +378,7 @@ def main():
         check_status(input_dir, args.output_dir)
         return
 
-    # Defense mode: per-record scores to a judged JSONL, plus an aggregate summary.
+    # Defense mode: per-record scores to a judged JSONL, plus a summary.
     if args.mode == "defense":
         from collections import defaultdict
 
@@ -392,7 +392,6 @@ def main():
         # Load input rows
         rows = [json.loads(l) for l in open(input_file)]
         # H5: one canonical golden per unique query text before judging.
-        from benign_split import canonicalize_goldens
         canonicalize_goldens(rows)
         print(f"  Total rows: {len(rows)}")
 
@@ -402,7 +401,7 @@ def main():
             for line in open(judged_file):
                 try:
                     r = json.loads(line)
-                    # Only count a record done if it has a score, so an interrupted run retries parse failures.
+                    # Done only if it has a score, so a resumed run retries parse failures.
                     if r.get("judge_score") is not None:
                         done_keys.add((r["query_id"], r["target_model_short"], r["defense"]))
                 except Exception:
@@ -432,7 +431,7 @@ def main():
             # Canonical reject sentinel emitted when a defense blocks a response.
             REJECT_SENTINEL = "Sorry, I CANNOT assist with that."
 
-            # Blocked rows are never judged: a block is a non-answer, so quality is forced to 0.0.
+            # Blocked rows are never judged: a block is a non-answer, so quality = 0.
             entries = []
             blocked_idxs = []
             for i, r in enumerate(pending):
@@ -442,7 +441,7 @@ def main():
                     blocked_idxs.append(i)
                     continue
                 if gt and gt != "nan" and cand:
-                    # Pass the FULL response; truncating cuts the final-answer line and mis-scores as ~0.
+                    # The FULL response: truncating cuts the answer line and mis-scores ~0.
                     entries.append((i, build_judge_prompt(gt, cand)))
 
             print(f"  Judgeable: {len(entries)}/{len(pending)} "
@@ -564,7 +563,6 @@ def main():
             print(f"{'='*60}")
 
             results = load_responses(input_path)
-            from benign_split import canonicalize_goldens
             canonicalize_goldens(results)  # H5: canonical golden per query text
             judged = load_judged(output_path) if args.resume else None
             if judged is None:
@@ -595,7 +593,7 @@ def main():
                             "max_tokens": args.max_tokens,
                             "temperature": 0.0,
                         }
-                        # Disable thinking: OpenRouter via reasoning.effort, vLLM via chat_template_kwargs.
+                        # No thinking: OpenRouter reasoning.effort, vLLM chat_template_kwargs.
                         if is_openrouter:
                             payload["reasoning"] = {"effort": "none"}
                         else:

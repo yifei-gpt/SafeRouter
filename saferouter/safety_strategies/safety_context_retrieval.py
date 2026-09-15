@@ -1,5 +1,5 @@
-"""Safety Context Retrieval (S1): retrieve the top K=4 similar safety contexts from
-a pre-embedded WildJailbreak pool and prepend them as few-shot examples.
+"""Safety Context Retrieval (S1): retrieve the top K=4 similar safety contexts
+from a pre-embedded WildJailbreak pool and prepend them as few-shot examples.
 
 Chen et al., arXiv:2505.15753.
 """
@@ -28,7 +28,7 @@ def _pick_least_loaded_device() -> str:
             best_idx, best_free = i, free
     return f"cuda:{best_idx}"
 
-# SCR primers AUGMENT S0's prompt rather than replace it, so the worst case is still >= S0.
+# SCR primers AUGMENT S0's prompt, so the worst case is still >= S0.
 SCR_PRIMER_BLOCK = """
 
 Below are examples of unsafe requests and the safe responses you should give to similar requests:
@@ -54,7 +54,7 @@ class SafetyContextRetrievalStrategy(BaseStrategy):
         self.k = k
         self._load_pool()      # raises if pool not on disk
         from sentence_transformers import SentenceTransformer
-        # Disable the cuDNN SDPA path: on sm_100 it has "No valid execution plans" here.
+        # No cuDNN SDPA: on sm_100 it raises "No valid execution plans" here.
         try:
             import torch
             torch.backends.cuda.enable_cudnn_sdp(False)
@@ -101,7 +101,7 @@ class SafetyContextRetrievalStrategy(BaseStrategy):
     def apply(self, query: str, max_tokens: int = 4096) -> StrategyResult:
         try:
             examples = self._retrieve(query)
-            # Additive: keep S0's prompt and append the primers, so the worst case is >= S0.
+            # Additive: S0's prompt plus the primers, so the worst case is >= S0.
             text, usage = self._generate(
                 query, max_tokens,
                 system=SAFETY_SYSTEM_PROMPT + SCR_PRIMER_BLOCK.format(examples=examples))

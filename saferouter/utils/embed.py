@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Embed adversarial probes, benign queries, or model profiles.
 
-    python embed.py {adversarial|benign|profiles|all} [--out PATH]
+    python -m utils.embed {adversarial|benign|profiles|all} [--out PATH]
 """
 import argparse, json
 from pathlib import Path
@@ -12,7 +12,7 @@ from tqdm import tqdm
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH = 32
 MAX_LEN = 4096   # no truncation: max observed 2013 tok (benign) / 1579 (adv cleaned); generous
-                 # ceiling; dynamic padding costs nothing unless exceeded. Left-truncation keeps the goal.
+                 # ceiling; dynamic padding is free below it. Left-truncation keeps the goal.
 
 MODELS_POOL = [
     "qwen3-0.6b", "qwen3-1.7b", "qwen3-4b", "qwen3-8b",
@@ -75,7 +75,7 @@ def assert_embeddings_distinct(embs, texts, name, min_ratio=0.99):
 def embed_texts(tok, enc, texts, batch_size=BATCH):
     embs = []
     for i in tqdm(range(0, len(texts), batch_size), desc="embed"):
-        # Char pre-guard above any real input so MAX_LEN governs; keeps the LAST chars.
+        # Char pre-guard above any real input so MAX_LEN governs; keeps the tail.
         batch = [t[-20000:] for t in texts[i:i + batch_size]]
         inp = tok(batch, padding=True, truncation=True, max_length=MAX_LEN, return_tensors="pt").to(DEVICE)
         with torch.no_grad():
@@ -132,7 +132,7 @@ def embed_profiles(out_path, model_id="Qwen/Qwen3-Embedding-0.6B"):
     for m in MODELS_POOL:
         inp = tok([PROFILES[m]], return_tensors="pt", truncation=True, max_length=MAX_LEN).to(DEVICE)
         with torch.no_grad():
-            # Same last-token pooling as embed_texts, so query and model embeddings share one space.
+            # Same pooling as embed_texts, so both embeddings share one space.
             h = last_token_pool(enc(**inp).last_hidden_state, inp["attention_mask"])
             # .float() to match embed_texts, else fp16 profiles break MIRT's theta_proj.
             embeddings[m] = F.normalize(h, p=2, dim=-1).float().cpu().squeeze(0)

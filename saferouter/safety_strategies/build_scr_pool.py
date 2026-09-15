@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build the SCR pool from WildJailbreak (vanilla_harmful + safe refusals, embedded)
-as pool_texts.json + pool_embeddings.npy. Chen et al. (arXiv:2505.15753): 50K entries.
+"""The SCR pool from WildJailbreak (vanilla_harmful + safe refusals, embedded)
+as pool_texts.json + pool_embeddings.npy. Chen et al. (arXiv:2505.15753): 50K.
 
-    python safety_strategies/build_scr_pool.py [--max-entries N] [--embedding-model M]
+    python -m safety_strategies.build_scr_pool [--max-entries N]
 """
 
 import argparse

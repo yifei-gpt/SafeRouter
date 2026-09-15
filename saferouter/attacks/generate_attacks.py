@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate attack prompts for all goals x methods via PandaGuard, with
-Llama-3.1-8B-Instruct as the unified proxy (a local vLLM server is auto-started):
-6 template + 7 rewrite + 4 optimization attacks.
+"""Attack prompts for all goals x methods via PandaGuard, with
+Llama-3.1-8B-Instruct as the unified proxy (a local vLLM server is started for
+you): 6 template + 7 rewrite + 4 optimization attacks.
 
     python generate_attacks.py --phase {template|rewrite|optimize|all}
     -> data/attacks/goals/expanded_attacks.jsonl
@@ -24,7 +24,7 @@ ATTACK_DATA = REPO_ROOT / "data" / "attacks"
 GOALS_PATH = ATTACK_DATA / "goals" / "combined_goals.jsonl"
 TEMPLATES_PATH = ATTACK_DATA / "goals" / "templates.json"
 
-# Optimization/search attacks come from these PandaGuard CSVs, not regenerated.
+# Optimization/search attacks come from PandaGuard CSVs, not regenerated.
 JBB_PATH = ATTACK_DATA / "precomputed" / "jbb_expanded.csv"
 HM_PATH = ATTACK_DATA / "precomputed" / "hm_expanded.csv"
 
@@ -435,7 +435,7 @@ def generate_rewrite_attacks(goals, existing, out_f, max_workers=128):
         query = run_attacker(attacker, method, g["goal"])
         return g, method, query
 
-    # Programmatic methods are instant, LLM ones I/O-bound: all workers stay usable.
+    # Programmatic methods are instant, LLM ones I/O-bound: all workers used.
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(do_one, g, m): (g, m) for g, m in work}
         done = 0
@@ -481,7 +481,7 @@ def generate_pair_attacks(goals, existing, out_f, n_iterations=5, max_workers=32
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
 
-    # PAIR attacker/target need OpenAiLLM (legacy completions); its judge needs OpenAiChatLLM.
+    # PAIR attacker/target need OpenAiLLM; its judge needs OpenAiChatLLM.
     llm_config = make_proxy_llm_config(chat=False)
     chat_config = make_proxy_llm_config(chat=True)
 
@@ -568,7 +568,7 @@ def generate_autodan_attacks(goals, existing, out_f, n_iterations=100):
     if not work:
         return 0
 
-    # PandaBench config; no proxy needed, so kill it to free RAM for the HF model.
+    # PandaBench config; no proxy, so kill it to free RAM for the HF model.
     print("  Killing vLLM proxy to free CPU RAM for HF model loading...")
     try:
         result = subprocess.run(["lsof", "-ti:%d" % PROXY_PORT], capture_output=True, text=True)
@@ -712,7 +712,7 @@ def main():
     existing.update(read_pairs(OUT_PATH))
     print("Resumed %d total (goal, method) pairs" % len(existing))
 
-    # Start proxy if needed (not required for AutoDAN-only runs — it uses HF directly)
+    # Start the proxy unless this is AutoDAN-only, which uses HF directly.
     needs_llm = args.phase in ("rewrite", "all")
     if needs_llm and not args.no_autostart:
         if not ensure_proxy_running():

@@ -227,7 +227,7 @@ async def main():
             except Exception:
                 continue
 
-    # Auto-scale concurrency: shared-GPU batches are KV-cache limited, single-model higher.
+    # Auto-scale concurrency: shared-GPU batches are KV-cache limited.
     MODEL_CONCURRENCY = {
         # Batch 1: 6 models sharing GPU (total ~0.95)
         "Qwen/Qwen3-0.6B": 64,       # 8GB KV

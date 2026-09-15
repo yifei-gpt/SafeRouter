@@ -44,14 +44,15 @@ saferouter/
     routellm.py          RouteLLM — bilinear MF
     carrot.py            CARROT — k-NN over quality and cost
     irt_router.py        IRT-Router — 2PL/MIRT
+  utils/                 what every entrypoint shares
+    data_io.py           probes, judgements, embeddings, folds — one loader each
+    evaluate.py          ASR/cost scoring, the threshold sweep, the τ* rule
+    embed.py             Qwen3-Embedding-0.6B encoder
+    benign_split.py      group-aware split (duplicate texts never straddle)
   train_saferouter.py    training the router: losses, k-fold, τ* selection
-  evaluate.py            ASR/cost scoring, the threshold sweep, the τ* rule
-  data_io.py             probes, judgements, embeddings, folds — one loader each
   train_all_routers.py   baselines: RouteLLM · CARROT-KNN · IRT-Router
   eval_baseline_asr.py   those baselines' ASR/cost on the adversarial probes
   mega_ensemble.py       pool per-fold nets across runs → honest frontier
-  embed.py               Qwen3-Embedding-0.6B encoder
-  benign_split.py        group-aware benign split (duplicate texts never straddle)
   cost/                  pricing + per-probe cost tensor from actual token counts
   probe/                 adversarial / benign / benign-defense probe drivers
   safety_strategies/     the 7 defenses S0–S6
@@ -78,8 +79,8 @@ From `saferouter/`:
 
 ```python
 from cost import COMPOSITES, MODELS
-from data_io import probe_query
-from embed import embed_texts, load_encoder
+from utils.data_io import probe_query
+from utils.embed import embed_texts, load_encoder
 from routers import load_router, route
 
 CKPT, DEV, FOLD, MIN_P_SAFE = "../data/checkpoints", "cuda", 0, 0.985
@@ -133,7 +134,7 @@ python attacks/generate_attacks.py --phase all   # 1. attack prompts
 python -m probe.build_probe_input                #    → clean 559 × 16 grid
 python -m probe.adversarial                      # 2. probe 10 models × 16 composites
 python -m probe.benign && python -m probe.benign_defense
-python embed.py all                              # 3. embeddings
+python -m utils.embed all                        # 3. embeddings
 python -m cost.build_cost_tensor                 #    (order matters)
 bash ../scripts/train.sh                         # 4. train
 ```

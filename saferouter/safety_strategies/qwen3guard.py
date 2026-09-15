@@ -179,7 +179,7 @@ class Qwen3GuardStrategy(BaseStrategy):
         self.guard_model = guard_model
 
     def _moderate_prompt(self, query: str) -> Tuple[dict, int, int]:
-        # No truncation: a low cap makes the guard miss the goal at the END of long attack prompts.
+        # No truncation: a low cap hides the goal at the END of long prompts.
         messages = [{"role": "user", "content": query[:20000]}]
         text, p, c = judge_call(self.guard_client, self.guard_model, messages,
                                 max_tokens=64, temperature=0.0)

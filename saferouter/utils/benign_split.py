@@ -1,6 +1,6 @@
-"""Shared benign train/test split, grouped by duplicate query text: R2Bench repeats
-texts under different question_ids, so an index-level split leaks test into train.
-train_saferouter and train_all_routers must call this with the same qid list.
+"""The benign train/test split, grouped by duplicate query text: R2Bench repeats
+texts under different question_ids, so an index split leaks test into train.
+Every caller must pass the same qid list.
 """
 import numpy as np
 

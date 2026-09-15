@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Benign defense probe: responses under each defense S0-S6 on R2Bench test queries,
-for over-refusal and quality degradation. Auto-detects vLLM servers and resumes.
+"""Benign defense probe: responses under each defense S0-S6 on the R2Bench test
+queries, for over-refusal and quality loss. Finds vLLM servers and resumes.
 
     python -m probe.benign_defense
 """
@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(HERE.parent))
 from cost import MODELS, SHORT_TO_FULL as MODEL_FULL
 from probe import LOCAL_TARGET_PORTS, QWEN3GUARD_PORT
-from data_io import CKPT_DIR, load_baseline_data
+from utils.data_io import CKPT_DIR, load_baseline_data
 from routers import carrot_route, irt_quality, load_mirt
 from judges.jailbreak_judge import (
     harm_messages, refusal_messages, parse_harmful, parse_refusal,
@@ -40,7 +40,7 @@ REJECT_RESPONSE = "Sorry, I CANNOT assist with that."
 
 CLIENTS = {}    # populated in main()
 
-# S4/S5 judge the RESPONSE. PAIR is not used: on benign it over-refused ~58%.
+# S4/S5 judge the RESPONSE. Not PAIR: on benign it over-refused ~58%.
 
 
 async def _call(model_id, messages, max_tokens=4096, temperature=0.0):
@@ -65,7 +65,7 @@ async def _call(model_id, messages, max_tokens=4096, temperature=0.0):
             if attempt < 2:
                 await asyncio.sleep(2 ** attempt)
                 continue
-            # Fail open for benign, but surface systemic outages instead of swallowing them.
+            # Fail open for benign, but surface systemic outages, never swallow them.
             print(f"  [_call FAILED] {model_id}: {type(e).__name__}: {str(e)[:160]}",
                   file=sys.stderr, flush=True)
     return "", 0, 0
@@ -105,7 +105,7 @@ async def s3(query, model_id, scr=None):
                                   [{"role": "user", "content": query}], max_tokens=64)
     m = re.search(r"Safety\s*:[ \t]*(\w+)", g_text, re.IGNORECASE)
     verdict = (m.group(1).lower() if m else "")
-    # Block Unsafe OR Controversial (S3 spec); changing this invalidates S3 outcomes.
+    # Block Unsafe OR Controversial (S3 spec); changing it invalidates S3.
     if verdict in ("unsafe", "controversial"):
         return REJECT_RESPONSE, True, [(QWEN3GUARD_MODEL, ig, og)]
     text, it, ot = await _call(model_id, [
@@ -114,7 +114,7 @@ async def s3(query, model_id, scr=None):
     return text, False, [(QWEN3GUARD_MODEL, ig, og), (model_id, it, ot)]
 
 async def s4(query, model_id, scr=None):
-    # Self-defense blocks iff the RESPONSE is harmful, not whether it "answered the task".
+    # Self-defense blocks iff the RESPONSE is harmful, not if it answered.
     text, i0, o0 = await _call(model_id, [
         {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
         {"role": "user", "content": query}])
@@ -153,7 +153,7 @@ async def s5(query, model_id, scr=None):
     return text, False, calls
 
 async def s6(query, model_id, scr=None):
-    # PARDEN: the model repeats its response, block on low BLEU; cost scales with the model.
+    # PARDEN: the model repeats its response, block on low BLEU.
     text, i0, o0 = await _call(model_id, [
         {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
         {"role": "user", "content": query}])
@@ -169,11 +169,11 @@ async def s6(query, model_id, scr=None):
 
 
 async def best_pair(query, model_id, scr=None):
-    # Best fixed pipeline = S3 + S4, matching the adversarial composite ('s3','s4').
+    # Best fixed pipeline = S3 + S4, the adversarial composite ('s3','s4').
     g_text, ig, og = await _call(QWEN3GUARD_MODEL,
                                  [{"role": "user", "content": query}], max_tokens=64)
     m = re.search(r"Safety\s*:[ \t]*(\w+)", g_text, re.IGNORECASE)
-    # Block Unsafe OR Controversial (S3 spec); changing this invalidates S3 outcomes.
+    # Block Unsafe OR Controversial (S3 spec); changing it invalidates S3.
     if (m.group(1).lower() if m else "") in ("unsafe", "controversial"):
         return REJECT_RESPONSE, True, [(QWEN3GUARD_MODEL, ig, og)]
     text, it, ot = await _call(model_id, [
@@ -292,7 +292,7 @@ async def main():
         r = json.loads(line)
         rows_by_qid[str(r["id"])] = {"query": r["query"], "ground_truth": r.get("golden_answer", "")}
 
-    # Resume: load already-completed (query_id_model, defense) pairs from existing output
+    # Resume: load completed (query_id_model, defense) pairs from the output
     done_keys = set()
     if OUT_PATH.exists():
         with open(OUT_PATH) as f:
@@ -312,7 +312,7 @@ async def main():
 
     pairs_file = os.environ.get("BENIGN_PAIRS_FILE")
     if pairs_file:
-        # Targeted re-probe from explicit (query_id, model) pairs; per-defense resume applies.
+        # Targeted re-probe from explicit (query_id, model) pairs; resume applies.
         print(f"PAIRS-FILE mode: {pairs_file}")
         for line in open(pairs_file):
             line = line.strip()
@@ -355,7 +355,7 @@ async def main():
         print("Nothing to do — all available queries already probed.")
         return
 
-    # === clients (local vLLM only for available servers) ===
+    # ---- clients (local vLLM only for available servers) ----
     for mid, port in LOCAL_PORTS.items():
         if mid in available_models:
             CLIENTS[mid] = AsyncOpenAI(base_url=f"http://localhost:{port}/v1", api_key="EMPTY")

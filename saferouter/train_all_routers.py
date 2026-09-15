@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Train the three quality-cost baseline routers on 28K R2Bench queries: BilinearMF
-(RouteLLM), CARROT-KNN, and MIRT (IRT-Router), all on the shared group-aware 85/15
-split from benign_split.
+"""The three quality-cost baselines on 28K R2Bench queries: BilinearMF
+(RouteLLM), CARROT-KNN and MIRT (IRT-Router), all on the shared group-aware
+85/15 split.
 
     python train_all_routers.py [--only mirt carrot]
 """
@@ -16,10 +16,9 @@ from sklearn.metrics import roc_auc_score, mean_squared_error
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import cross_val_score
 
-# The model pool comes from cost/ so it cannot drift from cost/price.json or from
-# train_saferouter's view of the same pool.
+# The model pool comes from cost/ so it cannot drift from price.json.
 from routers import BilinearMF, MIRTNet
-from data_io import CKPT_DIR, EMB_LLM, load_baseline_data
+from utils.data_io import CKPT_DIR, EMB_LLM, load_baseline_data
 from cost import MODELS, N_MODELS
 
 CORRECT_THR = 0.7
@@ -159,7 +158,7 @@ def train_carrot_knn(data, *, save_path):
     C_train = data["cost"][data["train_idx"]]
     C_test = data["cost"][data["test_idx"]]
 
-    # --- Quality branch ---
+    # ---- Quality branch ----
     print("  [Quality branch]")
     best_k, cv_score = tune_n_neighbors(X_train, Y_train)
     print(f"    Best k={best_k}  CV R²={cv_score:.4f}")
@@ -177,7 +176,7 @@ def train_carrot_knn(data, *, save_path):
             aucs.append(0.5)
     print(f"    Test mean_auc={np.mean(aucs):.4f}")
 
-    # --- Cost branch (Z-score normalized, matching original) ---
+    # ---- Cost branch (Z-score normalized, matching original) ----
     print("  [Cost branch]")
     cost_mu = C_train.mean(axis=0, keepdims=True)
     cost_std = C_train.std(axis=0, keepdims=True) + 1e-8
@@ -215,7 +214,7 @@ def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
     llm_M = torch.stack([llm_dict[m] for m in MODELS]).to(DEVICE)  # (N_MODELS, 1024)
     Q_emb = data["all_embs"].to(DEVICE)
 
-    # Checkpoints selected on a train-internal val split; test held out entirely.
+    # Checkpoints selected on a train-internal val split; test stays held out.
     vrng = np.random.RandomState(SEED + 9973)
     perm = vrng.permutation(len(data["train_idx"]))
     n_val = max(1, int(0.15 * len(data["train_idx"])))
@@ -270,7 +269,7 @@ def train_mirt(data, *, save_path, epochs=30, lr=1e-3, patience=8):
                 truths.extend(s.cpu().tolist())
         preds, truths = np.array(preds), np.array(truths)
         try:
-            # AUC of continuous preds vs the 0.5-binarized label (reference binarizes both).
+            # AUC of continuous preds vs the 0.5-binarized label.
             auc = float(roc_auc_score(truths >= 0.5, preds))
         except ValueError:   # only one class present → AUC undefined
             auc = 0.5

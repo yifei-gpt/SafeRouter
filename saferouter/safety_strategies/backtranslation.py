@@ -1,8 +1,8 @@
 """Backtranslation (S5): backtranslate the response to infer the deobfuscated
-request, re-query the target with it, and block the original if that clean request
-is refused. Both checks use a refusal detector, NOT the PAIR judge.
+request, re-query the target with it, and block the original if that clean
+request is refused. Both checks use a refusal detector, NOT the PAIR judge.
 
-Wang et al., ACL 2024 Findings (arXiv:2402.16459); PandaGuard BackTranslationDefender.
+Wang et al., ACL 2024 Findings (arXiv:2402.16459); PandaGuard's defender.
 """
 
 import os
@@ -16,7 +16,7 @@ except ImportError:
     from judges.jailbreak_judge import refusal_messages, parse_refusal, INLINE_JUDGE_MODEL
 
 
-# PandaBench's standardized helper, same family as BackTranslationDefender.infer_llm.
+# PandaBench's standardized helper, as BackTranslationDefender.infer_llm.
 BACKTRANSLATION_HELPER_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 

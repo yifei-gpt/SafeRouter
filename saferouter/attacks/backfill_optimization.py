@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """Backfill the optimization/encoding attacks (GPT4Cipher, RandomSearch, SCAV,
-AutoDAN, COLD, ArtPrompt) from PandaBench's 83 goals to all 559. White-box methods
-load Llama-3.1-8B via panda_guard, sharded over --workers (~16GB each). Appends to
-data/adversarial/backfill_attacks.jsonl; resume-safe.
+AutoDAN, COLD, ArtPrompt) from PandaBench's 83 goals to all 559. White-box ones
+load Llama-3.1-8B via panda_guard, sharded over --workers (~16GB each).
+Appends to data/adversarial/backfill_attacks.jsonl; resume-safe.
 
-    --methods M...  subset (default all)   --timing  1 goal/method, writes nothing
+    --methods M...  subset (default all)   --timing  1 goal/method, no write
     --workers N     white-box processes    --limit N goals per method
 """
 
@@ -14,10 +14,10 @@ import sys
 # Environment (CRITICAL): set before any HF / torch import.
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-# Reduce CUDA allocator fragmentation (helps the memory-heavy fp32 COLD decode).
+# Reduce allocator fragmentation; helps the fp32 COLD decode.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-# COLD needs GLIBCXX_3.4.30: point SAFEROUTER_LIBSTDCPP at a conda libstdc++.so.6.
+# COLD needs GLIBCXX_3.4.30: SAFEROUTER_LIBSTDCPP -> a conda libstdc++.
 _CONDA_LIBSTDCPP = os.environ.get("SAFEROUTER_LIBSTDCPP", "")
 if (not os.environ.get("_BACKFILL_PRELOADED")
         and os.path.exists(_CONDA_LIBSTDCPP)):
@@ -48,7 +48,7 @@ REPO = HERE.parent.parent                       # .../SafeRouter/SafeRouter
 PROBE_INPUT = REPO / "data" / "adversarial" / "probe_input_merged.jsonl"
 OUT_PATH = REPO / "data" / "adversarial" / "backfill_attacks.jsonl"
 
-# SCAV optimized-instruction CSVs (static lookup tables shipped with panda-guard).
+# SCAV optimized-instruction CSVs, shipped with panda-guard.
 PANDA_GUARD_ROOT = REPO.parent / "panda-guard"
 SCAV_CSV_8B = PANDA_GUARD_ROOT / "data" / "SCAV" / "optimized_instructions_8b.csv"
 SCAV_CSV_70B = PANDA_GUARD_ROOT / "data" / "SCAV" / "optimized_instructions_70b.csv"
@@ -58,7 +58,7 @@ AUTODAN_PROMPTS = (PANDA_GUARD_ROOT / "src" / "panda_guard" / "role" / "attacks"
                    / "autodan" / "prompt_group.yaml")
 
 
-# COLD decoding config (panda-guard cold.yaml), as the SimpleNamespace it reads as self.args.
+# COLD decoding config (panda-guard cold.yaml), as the self.args namespace.
 COLD_CONFIG = dict(
     no_cuda=False, verbose=False, print_every=2000, pretrained_model="llama2",
     wandb=False, straight_through=True, topk=10, rl_topk=0, lexical="max",
@@ -129,7 +129,7 @@ def load_existing_pairs():
     return pairs
 
 
-# Attackers return one goal's attack query or raise; white-box built once per process.
+# Attackers return one goal's query or raise; white-box built once/process.
 def _quiet_run(attacker, idx=-1):
     """attacker.attack mutates messages in place and prints; suppress stdout."""
     def run(goal):
@@ -244,7 +244,7 @@ def build_cold(num_iters=None, length=None):
         white_box_llm_gen_config=LLMGenerateConfig(
             max_n_tokens=4096, temperature=1.0, logprobs=False),
     )
-    # COLD's decoder hardcodes float32 but panda_guard loads fp16 -> cast after construction.
+    # COLD's decoder hardcodes float32, panda_guard loads fp16 -> cast after.
     cold_args = dict(COLD_CONFIG)
     if num_iters is not None:
         cold_args["num_iters"] = num_iters
@@ -422,7 +422,7 @@ def run_inline_method(method, goals, existing):
     return n_ok
 
 
-# Timing probe (1 goal per method, writes nothing); full iteration budgets for extrapolation.
+# Timing probe: 1 goal per method, writes nothing, full iteration budgets.
 FULL_ITERS = {"RandomSearch": 3, "AutoDAN": 250, "COLD": 1000}
 # Iteration counts used by the timing probe (reduced for white-box).
 PROBE_ITERS = {"RandomSearch": 1, "AutoDAN": 2, "COLD": 20}
@@ -471,7 +471,7 @@ def run_timing(methods, goals, workers):
             continue
 
         ok = bool(query and str(query).strip())
-        # Extrapolate per-goal time to the full iteration budget (build cost amortized).
+        # Extrapolate per-goal time to the full budget (build cost amortized).
         per_goal_full = attack_s
         note = ""
         if method in PROBE_ITERS:

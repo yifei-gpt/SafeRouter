@@ -34,7 +34,7 @@ class SafetyOutcomePredictor(nn.Module):
                           nn.GELU(), nn.Dropout(dropout)])
         self.backbone = nn.Sequential(*layers)
 
-        # Flat 160-way base; bilinear ADDS a zero-init correction, so it starts there.
+        # Flat 160-way base; bilinear ADDS a zero-init correction on top.
         self.safety_head = nn.Linear(hidden_dim, n_models * n_composites)
         if safety_arch == "bilinear":
             d = 64
@@ -43,7 +43,7 @@ class SafetyOutcomePredictor(nn.Module):
             self.defense_emb = nn.Parameter(torch.randn(n_composites, d) * 0.02)
             self.inter_scale = nn.Parameter(torch.zeros(1))      # zero-init → starts at flat
 
-        # ── Cost head: per-cell expected cost, log1p-normalized ──
+        # ---- Cost head: per-cell expected cost, log1p-normalized ----
         self.cost_head = nn.Linear(hidden_dim, n_models * n_composites)
         # Per-cell P(safe) temperature, fit on val.
         self.register_buffer("temperature", torch.ones(n_models, n_composites))
@@ -53,18 +53,18 @@ class SafetyOutcomePredictor(nn.Module):
         self.register_buffer("cost_log_mean", torch.zeros(1))   # cost-target normalization
         self.register_buffer("cost_log_std", torch.ones(1))
 
-        # ── Quality head ──
+        # ---- Quality head ----
         self.quality_head = nn.Sequential(
             nn.Linear(hidden_dim, 64), nn.GELU(), nn.Linear(64, n_models))
 
-        # ── Risk head ──
+        # ---- Risk head ----
         self.risk_head = nn.Sequential(
             nn.Linear(hidden_dim, 64),
             nn.GELU(),
             nn.Linear(64, 1),
         )
 
-        # ── Lagrange multiplier (log-space for positivity) ──
+        # ---- Lagrange multiplier (log-space for positivity) ----
         self.log_lambda = nn.Parameter(torch.tensor(0.0))
 
 

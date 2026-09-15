@@ -1,8 +1,7 @@
-"""Loading the shipped probes, judgements and embeddings, and the fold structure.
+"""The shipped probes, judgements and embeddings, plus the fold structure.
 
-Both training drivers read the same three sources -- r2bench_28k_embeddings.pt,
-benign/judged/*.jsonl and benign/responses/*.jsonl -- so the benign loader lives
-here once and each caller picks the tensor/array flavour it wants.
+Both training drivers read the same three benign sources, so the loader lives
+here once and each caller picks the tensor or array flavour it wants.
 """
 import json
 from pathlib import Path
@@ -13,8 +12,9 @@ import torch
 from cost import (COMPOSITE_TO_IDX, FULL_TO_SHORT, JUDGED_FILES, MODEL_COSTS, MODELS,
                   N_COMPOSITES, N_MODELS, RESPONSE_FILES)
 from cost import per_query_costs as cost_per_query
+from utils.benign_split import group_split_indices
 
-DATA = Path(__file__).parent.parent / "data"
+DATA = Path(__file__).resolve().parents[2] / "data"
 EMB_ADV = DATA / "embeddings" / "adversarial_full_embeddings.pt"
 EMB_BEN = DATA / "embeddings" / "r2bench_28k_embeddings.pt"
 EMB_LLM = DATA / "embeddings" / "model_profile_embeddings.pt"
@@ -135,8 +135,7 @@ def load_benign_data(per_1000q=True, strict_costs=False):
 
     embs_subset = embs[emb_indices]
 
-    # Split — group-aware so duplicate query texts never straddle train/test (H5)
-    from benign_split import group_split_indices
+    # Group-aware: duplicate query texts never straddle train/test.
     train_idx, test_idx = group_split_indices(valid_qids, query_text, test_frac=0.15)
 
     print(f"  Benign: {N} queries, train={len(train_idx)}, test={len(test_idx)}")

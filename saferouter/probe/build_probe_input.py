@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Rebuild a clean, de-duplicated adversarial probe input: drop degenerate rows,
-recover distinct goals by (goal_text, source) -> 83 + 124 + 352 = 559, give each ONE
-source-namespaced id (never bare-numeric, which the driver's pb_-prefixing would
-collide), and keep the first valid row per (goal, method). Input is never overwritten.
+"""A clean, de-duplicated adversarial probe input: drop degenerate rows, recover
+distinct goals by (goal_text, source) -> 83 + 124 + 352 = 559, give each one
+source-namespaced id (never bare-numeric, which collides with the driver's pb_
+prefixing), keep the first valid row per (goal, method). Input is read-only.
 
     python -m probe.build_probe_input [--in ... --out ...]
 """
@@ -45,20 +45,20 @@ REFUSAL_PREFIXES = (
     "sorry, i can",
     "sorry, but i",
 )
-# Dropped only when the query OPENS with one of these and carries no payload.
+# Dropped only if the query OPENS with one of these and has no payload.
 REFUSAL_MAX_LEN = 600
 
 
 def is_whole_query_refusal(query: str) -> bool:
     """True iff the WHOLE query is an attacker/target refusal (be conservative:
     must START with a refusal phrase and not carry an embedded attack payload)."""
-    # Normalize curly apostrophes so "I can\u2019t" matches the straight-quote REFUSAL_PREFIXES.
+    # Normalize curly apostrophes so they match REFUSAL_PREFIXES.
     low = (query.lower().lstrip()
            .replace("’", "'").replace("‘", "'")
            .replace("ʼ", "'").replace("′", "'"))
     if not any(low.startswith(p) for p in REFUSAL_PREFIXES):
         return False
-    # A second conversational turn signals a multi-turn attack wrapper, not a refusal.
+    # A second turn means a multi-turn attack wrapper, not a refusal.
     if "\nuser:" in low or "user :" in low:
         return False
     # Pure refusals (often followed by safety-resource text) are short.
@@ -100,11 +100,11 @@ def main():
     assert in_path.resolve() != out_path.resolve(), \
         "refusing to overwrite the input file; choose a different --out"
 
-    # ---- Pass 1: read, filter, group ---------------------------------------
+    # ---- Pass 1: read, filter, group ----
     n_in = 0
     bad_lines = 0
     drops = Counter()
-    # (goal_text, source) -> {goal, source, ids, {attack_method: first valid row}}.
+    # (goal_text, source) -> {goal, source, ids, {method: first valid row}}.
     groups = {}
 
     with open(in_path) as f:
@@ -160,7 +160,7 @@ def main():
     # Pass 2: assign canonical namespaced ids, distinct goals per source.
     goals_by_source = Counter(src for (_g, src) in groups.keys())
 
-    # Mint stable fresh ids per source, avoiding any id already used in that namespace.
+    # Mint stable fresh ids per source, avoiding any already in use there.
     used_ids_by_prefix = defaultdict(set)
     for g in groups.values():
         for eid in g["existing_ids"]:
@@ -183,12 +183,12 @@ def main():
         source = g["source"]
         prefix = SOURCE_PREFIX.get(source)
         if prefix is None:
-            # Unknown source falls back to pb_ so the id is still namespaced and collision-free.
+            # Unknown source falls back to pb_, still namespaced and collision-free.
             prefix = "pb_"
         existing = sorted(eid for eid in g["existing_ids"] if eid.startswith(prefix))
         canonical_id_of[key] = existing[0] if existing else mint_id(prefix)
 
-    # ---- Emit cleaned rows -------------------------------------------------
+    # ---- Emit cleaned rows ----
     out_path.parent.mkdir(parents=True, exist_ok=True)
     n_out = 0
     per_method = Counter()
@@ -216,7 +216,7 @@ def main():
     # Collision gate: after pb_-prefixing, no two goals may share a query_id.
     collisions = {qid: keys for qid, keys in final_query_id_map.items()
                   if len(keys) > 1}
-    # Assert every emitted id is already namespaced, so the driver leaves it untouched.
+    # Every emitted id must be namespaced, so the driver leaves it untouched.
     non_namespaced = [cid for cid in emitted_id_for_goal
                       if not cid.startswith(NAMESPACES)]
     collision_gate_pass = (not collisions) and (not non_namespaced)
@@ -227,7 +227,7 @@ def main():
         and all(goals_by_source.get(s, 0) == c for s, c in EXPECTED_GOALS.items())
     )
 
-    # ---- Summary -----------------------------------------------------------
+    # ---- Summary ----
     print("=" * 70)
     print("build_probe_input.py summary")
     print("=" * 70)

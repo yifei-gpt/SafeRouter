@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from cost import MODELS, N_MODELS
-from data_io import CKPT_DIR, EMB_LLM
+from utils.data_io import CKPT_DIR, EMB_LLM
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

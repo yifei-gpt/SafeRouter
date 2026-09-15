@@ -1,7 +1,7 @@
 #!/bin/bash
 # Full training recipe: 3 safety-head configs x 6 seeds = 18 nets, pooled into
 # one ensemble. Reads data/adversarial/probe/labels.jsonl + the cost tensor.
-# Run build_cost_tensor and embed.py first.
+# Run build_cost_tensor and utils.embed first.
 set -u
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../saferouter" && pwd)"
 O=../data/checkpoints/k18_retrain; mkdir -p "$O"

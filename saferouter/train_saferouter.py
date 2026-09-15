@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-"""SafeRouter: security-aware routing with cost-conditioned defense selection.
-Four heads on a shared frozen Qwen3-Embedding-0.6B backbone -- safety
-P(safe|q,m,d,cost), cost, risk P(adversarial|q), quality for benign routing:
-
-    z = backbone(query);  z_cell = concat(z, model_emb, defense_emb, cost_feat)
-    safety_logit = cell_mlp(z_cell)        # all 10 x 16 = 160 cells at once
+"""Training SafeRouter: four heads on a frozen Qwen3-Embedding-0.6B backbone.
 
 Losses: inverse-focal + pairwise ranking + a Lagrangian constraint (min E[cost]
-s.t. ASR < eps); risk BCE; quality MSE. The defaults below are a SMOKE TEST --
-reproduce with scripts/train.sh, which passes the pre-registered flags.
+s.t. ASR < eps), risk BCE, quality MSE. The argparse defaults are a SMOKE TEST;
+scripts/train.sh passes the pre-registered flags.
 """
 import argparse
 import json
@@ -22,12 +17,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Model pool, composites and pricing live in cost/; duplicating them here is how
-# the reported dollars would silently drift from cost/price.json.
+# Model pool, composites and pricing live in cost/; a copy here is how the
+# reported dollars would silently drift from price.json.
 from routers import SafetyOutcomePredictor
 from routers.saferouter import _fit_isotonic, _fit_temperature
-from data_io import build_attack_method_index, load_benign_data, load_safety_data, make_folds
-from evaluate import (OP_ASR_TARGET, ensemble_evaluate, ensemble_threshold_sweep,
+from utils.data_io import build_attack_method_index, load_benign_data, load_safety_data, make_folds
+from utils.evaluate import (OP_ASR_TARGET, ensemble_evaluate, ensemble_threshold_sweep,
                       evaluate, evaluate_risk_gate, select_tau, threshold_sweep)
 from cost import COST_MATRIX
 
@@ -37,16 +32,16 @@ DATA = HERE.parent / "data"
 QUALITY_WEIGHT = 0.5      # benign quality MSE, trained jointly into the backbone
 
 
-# ─── Data paths ───
-# --hard-benign-emb: risk-head negatives teaching that sensitive != adversarial.
+# ---- Data paths ----
+# --hard-benign-emb: risk negatives teaching sensitive != adversarial.
 HARD_BEN_EMBS = None
 
 
-# ─── Data loading ───
+# ---- Data loading ----
 
-# ─── Model ───
+# ---- Model ----
 
-# ─── Training ───
+# ---- Training ----
 
 def train_epoch(net, optimizer, adv_embs, safety_tensor,
                 ben_embs, ben_quality, ben_train_idx,
@@ -61,7 +56,7 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
     All data must already be on `device`."""
     net.train()
 
-    # Cost-weighted terms need per-probe costs; fail fast, not a TypeError in the loss.
+    # Cost-weighted terms need per-probe costs; fail fast, not in the loss.
     if (cost_focal_alpha > 0 or cost_train_weight > 0 or cost_pred_weight > 0) and probe_costs is None:
         raise ValueError(
             "cost_focal_alpha>0 or cost_train_weight>0 or cost_pred_weight>0 requires "
@@ -94,11 +89,11 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
         if B == 0:
             continue
 
-        # ── Forward pass (adversarial) ──
+        # ---- Forward pass (adversarial) ----
         safety_logits, risk_logit = net(adv_embs[batch_adv])
         safety_targets = safety_tensor[batch_adv]  # (B, M, D)
 
-        # ── Safety loss (focal / plain BCE / inverse-focal for tail calibration) ──
+        # ---- Safety loss: focal / BCE / inverse-focal for tail calibration ----
         valid_mask = (safety_targets >= 0)
         targets_clamped = safety_targets.clamp(0, 1)
         p = torch.sigmoid(safety_logits)
@@ -121,7 +116,7 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
                                         focal.new_tensor(unsafe_weight), focal.new_tensor(1.0))
         loss_safety = focal[valid_mask].mean() if valid_mask.any() else _zero
 
-        # ── Pairwise ranking loss (vectorized) ──
+        # ---- Pairwise ranking loss (vectorized) ----
         flat_logits = safety_logits.view(B, -1)  # (B, 120)
         flat_safe = ((safety_targets > 0.5) & valid_mask).view(B, -1)
         flat_unsafe = ((safety_targets < 0.5) & valid_mask).view(B, -1)
@@ -140,7 +135,7 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
                                      v_logits.gather(1, unsafe_samples)))
             loss_rank = margins.mean()
 
-        # ── Cost-aware ranking: cheap safe > expensive safe ──
+        # ---- Cost-aware ranking: cheap safe > expensive safe ----
         if cost_train_weight > 0:
             flat_cost = probe_costs[batch_adv].view(B, -1)
             has_multi_safe = (n_safe > 1)
@@ -165,14 +160,14 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
                 if cost_diff_mask.any():
                     cost_margins = F.relu(0.5 - (cheap_logits[cost_diff_mask] -
                                                   expensive_logits[cost_diff_mask]))
-                    # cost_train_weight applies inside loss_rank: the effective weight is the product.
+                    # cost_train_weight also applies inside loss_rank: the weights multiply.
                     loss_rank = loss_rank + cost_train_weight * cost_margins.mean()
 
-        # ── Risk loss ──
+        # ---- Risk loss ----
         loss_risk_adv = F.binary_cross_entropy_with_logits(
             risk_logit, torch.ones_like(risk_logit))
 
-        # ── Benign: risk loss + quality loss ──
+        # ---- Benign: risk loss + quality loss ----
         loss_risk_ben = loss_quality = _zero
         if len(batch_ben) > 0:
             ben_z = net.backbone(ben_embs[batch_ben])
@@ -188,7 +183,7 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
                     net.risk_head(hb_z), torch.zeros(len(hb_idx), 1, device=device))
 
 
-        # Lagrangian soft-ASR surrogate = mean P(safe) over UNSAFE cells, not 1 - that.
+        # Soft-ASR surrogate = mean P(safe) over UNSAFE cells, not 1 - that.
         unsafe_mask = valid_mask & (targets_clamped < 0.5)
         if unsafe_mask.any():
             batch_asr_soft = p[unsafe_mask].mean()
@@ -199,12 +194,12 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
         lagrangian_primal = lam.detach() * violation
         lagrangian_dual = -lam * violation.detach()
 
-        # ── Combined loss ──
+        # ---- Combined loss ----
         loss = (loss_safety + rank_weight * loss_rank
                 + 0.5 * (loss_risk_adv + loss_risk_ben) + QUALITY_WEIGHT * loss_quality
                 + lagrangian_primal + lagrangian_dual)
 
-        # ── Cost head: per-query pipeline cost, detached backbone ──
+        # ---- Cost head: per-query pipeline cost, detached backbone ----
         if cost_pred_weight > 0 and valid_mask.any():
             with torch.no_grad():
                 z_c = net.backbone(adv_embs[batch_adv])          # frozen features (no backbone grad)
@@ -224,9 +219,9 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
     return total_loss / max(n_steps, 1)
 
 
-# ─── Evaluation ───
+# ---- Evaluation ----
 
-# ─── K-fold ───
+# ---- K-fold ----
 
 def train_one_fold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
                    ben_train_idx, train_idx, probe_costs, seed,
@@ -256,7 +251,7 @@ def train_one_fold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
         safety_arch=args.safety_arch,
     ).to(args.device)
 
-    # Cost-head target normalization (log1p-standardized), fit on TRAIN rows only.
+    # Cost-target normalization (log1p-standardized), fit on TRAIN rows only.
     if probe_costs is not None:
         _tc = probe_costs[train_sub]
         _pos = torch.log1p(_tc[_tc > 0])
@@ -297,7 +292,7 @@ def train_one_fold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
 
         if (epoch + 1) % eval_every == 0 or epoch == 0:
             if args.ckpt_mode == "constraint":
-                # Lexicographic: feasible (val ASR < target) at min cost, else min achievable ASR.
+                # Lexicographic: feasible (val ASR < target) at min cost, else min ASR.
                 pts = [evaluate(net, adv_embs, safety_tensor, val_idx, COST_MATRIX,
                                 device=args.device, probe_costs=probe_costs,
                                 safety_threshold=tau, use_cost_head=args.use_cost_head)
@@ -356,7 +351,7 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
         train_idx = np.array([i for i, m in idx_to_method.items() if m not in holdout])
         test_idx = np.array([i for i, m in idx_to_method.items() if m in holdout])
 
-        # Operating-point set, excluded from training so τ* is never selected on test.
+        # Operating-point set, held out of training so τ* never sees test.
         _orng = np.random.RandomState(20259 + fi)
         _op = _orng.permutation(len(train_idx))
         optval_idx = train_idx[_op[:max(1, int(0.15 * len(train_idx)))]]
@@ -372,7 +367,7 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
                 args, adv_embs, safety_tensor, ben_embs, ben_quality,
                 ben_train_idx, train_idx, probe_costs, seed,
                 exclude_idx=optval_idx)
-            # One NaN net makes every `P(safe) > τ` False, degenerating selection to argmax.
+            # One NaN net makes every `P(safe) > τ` False, degenerating to argmax.
             if not all(torch.isfinite(p).all() for p in net.state_dict().values()
                        if torch.is_floating_point(p)):
                 print(f"  !! seed={seed} DIVERGED (non-finite weights) — EXCLUDED from the ensemble")
@@ -482,7 +477,7 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
     return all_results
 
 
-# ─── Main ───
+# ---- Main ----
 
 def main():
     parser = argparse.ArgumentParser(description="Train Safety-Outcome Predictor (SOP)")
@@ -518,7 +513,7 @@ def main():
                         help="Learning rate for Lagrange multiplier")
     parser.add_argument("--n-seeds", type=int, default=5,
                         help="Number of seeds per fold for ensemble")
-    # ── Per-query cost head + calibration + diagram search ──
+    # ---- Per-query cost head + calibration + diagram search ----
     parser.add_argument("--safety-arch", type=str, default="flat",
                         choices=["flat", "bilinear"],
                         help="Safety-head diagram (all add a zero-init correction to the flat head)")

@@ -1,5 +1,5 @@
-"""Paraphrase (S2): a helper LLM rewrites the query in natural language, destroying
-token-level adversarial suffixes while preserving benign semantics.
+"""Paraphrase (S2): a helper LLM rewrites the query in natural language,
+destroying token-level adversarial suffixes but preserving benign semantics.
 
 Jain et al., 2023 (arXiv:2309.00614); PandaGuard ParaphraseDefender.
 """
@@ -11,7 +11,7 @@ from .base import BaseStrategy, StrategyResult, make_judge_client, judge_call
 
 PARAPHRASE_PROMPT = 'paraphrase the following paragraph: \n"{prompt}"\n\n'
 
-# PandaBench's standardized helper; smaller ones comply with DAN-style attacks.
+# PandaBench's standardized helper; smaller ones comply with DAN attacks.
 PARAPHRASE_HELPER_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 
@@ -22,7 +22,7 @@ class ParaphraseStrategy(BaseStrategy):
     def __init__(self, client, model,
                  judge_client=None, judge_model=None,
                  paraphrase_max_tokens: int = 2048, **kwargs):
-        # PandaGuard's default 512 truncates ~28% of attacks; pass paraphrase_max_tokens=512.
+        # PandaGuard's default 512 truncates ~28% of attacks.
         super().__init__(client, model)
         self.paraphrase_max_tokens = paraphrase_max_tokens
 

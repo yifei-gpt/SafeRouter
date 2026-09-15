@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Pool saved per-fold nets across runs and compute the leakage-free honest frontier
-(τ* on optval, evaluated on test). All runs must share folds/optval (same
---fold-seed) and be saved with --save-nets.
+"""Pool saved per-fold nets across runs into the leakage-free honest frontier
+(τ* on optval, read once on test). All runs must share folds and optval (the
+same --fold-seed) and be saved with --save-nets.
 
     python mega_ensemble.py <out_dir> <run_dir1> <run_dir2> ...
 """
@@ -12,8 +12,8 @@ from pathlib import Path
 import torch
 
 from cost import COST_MATRIX
-from data_io import load_safety_data
-from evaluate import (OP_ASR_TARGET, ensemble_evaluate, ensemble_threshold_sweep,
+from utils.data_io import load_safety_data
+from utils.evaluate import (OP_ASR_TARGET, ensemble_evaluate, ensemble_threshold_sweep,
                       select_tau)
 from routers import load_fold_nets
 
@@ -48,7 +48,7 @@ def main():
                                             device=dev, probe_costs=probe_costs, use_cost_head=True)
         opt_sweep = ensemble_threshold_sweep(nets, adv_embs, safety_tensor, optval_idx, COST_MATRIX,
                                                device=dev, probe_costs=probe_costs, use_cost_head=True)
-        # τ* from OPTVAL at the a-priori target, then TEST read once at it (mirrors run_kfold).
+        # τ* from OPTVAL at the a-priori target, then TEST read once at it.
         tau_star = select_tau(opt_sweep, OP_ASR_TARGET, len(optval_idx))
         ens = ensemble_evaluate(nets, adv_embs, safety_tensor, test_idx, COST_MATRIX,
                                   device=dev, probe_costs=probe_costs, safety_threshold=tau_star,

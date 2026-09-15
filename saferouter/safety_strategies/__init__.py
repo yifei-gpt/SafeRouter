@@ -1,13 +1,13 @@
-"""The 7 anchored defenses; the action space is the 4x4 factored policy
-pre {s0,s1,s2,s3} x post {s0,s4,s5,s6} = 16 composites, resolved by get_strategy().
+"""The 7 anchored defenses. The action space is pre {s0,s1,s2,s3} x post
+{s0,s4,s5,s6} = 16 composites, resolved by get_strategy().
 
     s0 baseline safety prompt        s4 SelfDefense (harmfulness judge)   post
     s1 SafetyContextRetrieval  pre   s5 Backtranslation                   post
     s2 Paraphrase              pre   s6 PARDEN (repeat-and-BLEU)          post
     s3 Qwen3Guard              pre
 
-These are REFERENCE implementations: the reported numbers come from the inline
-re-implementations in probe/, which import only SCR and shared prompts from here.
+REFERENCE implementations: the reported numbers come from the inline ones in
+probe/, which import only SCR and the shared prompts from here.
 """
 
 from .base import (

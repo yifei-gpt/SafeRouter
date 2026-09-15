@@ -1,7 +1,6 @@
 """Scoring a trained router: ASR and realized cost on the adversarial probes,
 the threshold sweep, and the tau* rule that turns a sweep into one honest
-operating point.
-"""
+operating point."""
 from collections import defaultdict
 
 import numpy as np
@@ -146,7 +145,7 @@ def ensemble_evaluate(nets, adv_embs, safety_tensor, adv_indices,
     x = adv_embs[adv_indices].to(device)
     B = x.shape[0]
 
-    # Average calibrated P(safe) (and predicted cost, if requested) across ensemble
+    # Average calibrated P(safe), and predicted cost if asked, across the nets
     p_safe_sum = torch.zeros(B, N_MODELS, N_COMPOSITES, device=device)
     cost_sum = torch.zeros(B, N_MODELS, N_COMPOSITES, device=device) if use_cost_head else None
     for net in nets:
@@ -157,7 +156,7 @@ def ensemble_evaluate(nets, adv_embs, safety_tensor, adv_indices,
             cost_sum += net.predict_cost(x)
     p_safe_avg = p_safe_sum / len(nets)
 
-    # Cheap-first selection (argmax(P_safe) fallback when no cell is safe enough)
+    # Cheap-first, falling back to argmax(P_safe) when no cell is safe enough
     if use_cost_head:
         costs = cost_sum / len(nets)
     elif cost_matrix.dim() == 2:

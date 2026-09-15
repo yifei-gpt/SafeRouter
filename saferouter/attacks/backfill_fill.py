@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fill remaining (goal x method) holes to a dense 559 x 16 grid, reusing the
-generators in generate_attacks.py so nothing drifts. Phases: template (GPU-free),
-rewrite / pair / gptfuzz (vLLM proxy). RandomSearch is backfill_optimization.py's job.
-Appends to data/adversarial/fill_attacks.jsonl; resume-safe.
+"""Fill remaining (goal x method) holes to a dense 559 x 16 grid, reusing
+generate_attacks.py's generators so nothing drifts. Phases: template (no GPU),
+rewrite / pair / gptfuzz (vLLM proxy). RandomSearch belongs to
+backfill_optimization.py. Appends to fill_attacks.jsonl; resume-safe.
 """
 import argparse
 import json

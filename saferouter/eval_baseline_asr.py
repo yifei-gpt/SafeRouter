@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""ASR + adversarial cost for the no-defense baselines (RouteLLM / CARROT / IRT-Router).
+"""ASR and cost for the no-defense baselines, on the 8,943 adversarial probes.
 
-train_all_routers.py fits them on benign R2Bench quality; this runs those trained
-routers over the 8,943 adversarial probes, reads off the (model, S0/S0) cell each
-one selects, and scores it against the safety tensor. The baselines pick a model
-only, so every query lands on composite 0 = ('s0','s0') -- the minimal-defense
-floor, which is what "no defense" means in the paper's table.
+They pick a model only, so every query scores at composite 0 = ('s0','s0'), the
+minimal-defense floor. A missing safety cell counts as jailbroken, as in
+evaluate(). Fit them first with train_all_routers.py.
 
-    python eval_baseline_asr.py                  # all three + oracle reference
-    python eval_baseline_asr.py --only mirt
-
-Missing safety cells count as jailbroken, matching train_saferouter.evaluate().
+    python eval_baseline_asr.py [--only mirt]
 """
 import argparse
 import json
@@ -20,7 +15,7 @@ import numpy as np
 import torch
 
 from cost import MODELS, N_MODELS
-from data_io import CKPT_DIR, load_safety_data
+from utils.data_io import CKPT_DIR, load_safety_data
 from routers import BilinearMF, carrot_route, irt_quality, load_mirt
 
 S0_COMPOSITE = 0

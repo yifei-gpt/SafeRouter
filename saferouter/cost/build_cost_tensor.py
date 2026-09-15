@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Build the per-probe adversarial cost tensor from actual per-query token counts
-(no fixed averages). Atom calls, X in {A,B,C} = generation under {S0, S1, S2}:
-target_X, harm_X (S4), refusal_X (S5 gate), s5_backtrans/requery_target/requery_inline
-(S5 full path); query-level: paraphrase (S2), qwen3guard (S3).
+"""The per-probe adversarial cost tensor, from actual token counts rather than
+averages. Atom calls, X in {A,B,C} = generation under {S0,S1,S2}: target_X,
+harm_X (S4), refusal_X (S5 gate), s5_* (S5 full path); query-level: paraphrase
+(S2), qwen3guard (S3).
 
     python -m cost.build_cost_tensor [--atoms PATH --qatoms PATH --out PATH]
-    -> adversarial_cost_tensor.pt: (N_probes, N_MODELS, N_COMPOSITES) $/1000q + keys
+    -> adversarial_cost_tensor.pt: (N, N_MODELS, N_COMPOSITES) $/1000q + keys
 """
 import argparse
 import json
@@ -22,7 +22,7 @@ from . import (
 HERE = Path(__file__).parent
 DATA = HERE.parent.parent / "data"
 
-# Atom ids must match the embedding keys, or the join yields an all-zero cost tensor.
+# Atom ids must match the embedding keys, or the join yields all zeros.
 DEFAULT_ATOMS = DATA / "adversarial" / "probe" / "atoms.jsonl"
 DEFAULT_QATOMS = DATA / "adversarial" / "probe" / "query_atoms.jsonl"
 DEFAULT_EMB = DATA / "embeddings" / "adversarial_full_embeddings.pt"
@@ -42,7 +42,7 @@ def build(atoms_path, qatoms_path, emb_path, out_path):
     key_to_idx = {k: i for i, k in enumerate(keys)}
     N = len(keys)
 
-    # Query-level helpers depend on the WRAPPED query -> key on (query_id, attack_method).
+    # Query helpers depend on the WRAPPED query -> key on (query_id, method).
     print("Loading query_atoms...")
     query_helper_costs = {}        # (query_id, attack_method) -> {para, guard}
     query_helper_by_qid = {}       # query_id -> any one method's helpers (fallback)
@@ -106,32 +106,32 @@ def build(atoms_path, qatoms_path, emb_path, out_path):
                    or query_helper_by_qid.get(qid)
                    or {"para": 0.0, "guard": 0.0})
 
-        # ── Target generation costs: A = S0, B = S1 (SCR), C = S2 (paraphrased) ──
+        # ---- Generation costs: A = S0, B = S1 (SCR), C = S2 (paraphrase) ----
         gen_A = _call_cost_1k(calls.get("target_A"))
         gen_B = _call_cost_1k(calls.get("target_B"))
         gen_C = _call_cost_1k(calls.get("target_C"))
 
-        # ── S1 overhead = actual extra input tokens × model input price ──
+        # ---- S1 overhead = actual extra input tokens × model input price ----
         s1_extra = max(calls.get("target_B", {}).get("in", 0) -
                        calls.get("target_A", {}).get("in", 0), 0)
         s1_overhead = s1_extra * MODEL_INPUT_PRICES[model_short] / 1e6 * 1e3
 
-        # ── S4 harmfulness-judge costs, matched to pre-defense (harm_A judges S0, etc.) ──
+        # ---- S4 judge costs, matched to pre-defense (harm_A judges S0) ----
         harm_A = _call_cost_1k(calls.get("harm_A"))
         harm_B = _call_cost_1k(calls.get("harm_B"))
         harm_C = _call_cost_1k(calls.get("harm_C"))
 
-        # S5 gate judge always runs; backtrans + re-query + 2nd judge only when NOT a refusal.
+        # S5's gate judge always runs; the rest only when NOT a refusal.
         refusal_A = _call_cost_1k(calls.get("refusal_A"))
         refusal_B = _call_cost_1k(calls.get("refusal_B"))
         refusal_C = _call_cost_1k(calls.get("refusal_C"))
 
-        # ── S6 PARDEN repeat costs (one target call per pre-defense response). ──
+        # ---- S6 PARDEN repeats: one target call per pre-defense response ----
         parden = {"A": _call_cost_1k(calls.get("parden_repeat_A")),
                   "B": _call_cost_1k(calls.get("parden_repeat_B")),
                   "C": _call_cost_1k(calls.get("parden_repeat_C"))}
 
-        # S5 calls are not slot-labeled: map ordered triples onto gated slots in A,B,C order.
+        # S5 calls are not slot-labeled: map ordered triples in A,B,C order.
         s5_gated = {
             sl: bool(atom.get(f"inline_harm_{sl}")) or (not bool(atom.get(f"inline_refusal_{sl}")))
             for sl in ("A", "B", "C")
@@ -154,7 +154,7 @@ def build(atoms_path, qatoms_path, emb_path, out_path):
         para_c = helpers["para"]
         guard_c = helpers["guard"]
 
-        # ── Fill all 16 composites (4 pre × 4 post) ──
+        # ---- Fill all 16 composites (4 pre × 4 post) ----
         for ci, (pre, post) in enumerate(COMPOSITES):
             # Pre-gen: pick the target generation + matched post-helper slot.
             if pre == "s0":
@@ -164,7 +164,7 @@ def build(atoms_path, qatoms_path, emb_path, out_path):
                 refusal_gate = refusal_A
                 slot = "A"
             elif pre == "s1":
-                # Use the actual S1 gen (target_B), falling back to S0 gen + input-only overhead.
+                # The actual S1 gen (target_B), else S0 gen + input-only overhead.
                 if gen_B > 0:
                     pre_ov = 0.0
                     gen = gen_B
