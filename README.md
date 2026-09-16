@@ -63,7 +63,7 @@ saferouter/
   judges/                ASR (PAIR) · quality
   attacks/               attack-prompt generation (via PandaGuard)
 scripts/                 install.sh · train.sh · judge.sh · start_local.sh
-data/                    probes, responses, judgements, embeddings (~6.8 GB)
+data/                    attack prompts here; responses + judgements withheld
 ```
 
 ## Train
@@ -117,10 +117,22 @@ a 4B model plus Qwen3Guard and Self-Defense. Routing that same attack by quality
 alone sends it to a big model with no defense, which is recorded jailbroken here:
 bigger is not safer.
 
-## Generating data
+## Data
 
-The pipeline that produces everything under `data/`. Steps 1–3 need GPUs and API
-keys (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`). Run from `saferouter/`.
+The repo carries the attack side: the 8,943 probes, the 10,294 generated attack
+prompts behind them, and the goal lists they came from. Those are derived from
+public benchmarks (HarmBench, Sorry-Bench, PandaBench) with public attack
+implementations, so shipping them adds nothing that is not already out there,
+and the routing example above reads one of them.
+
+What is held back is the outcome side — the model responses and the jailbreak
+judgements, about 6.8 GB. That is the record of which (attack, model, defense)
+combinations actually succeed against which model, which is the part worth
+withholding, and it stays out while the paper is under review. We will release
+it on publication for research use, through a gated request.
+
+The pipeline below regenerates it. Steps 1–3 need GPUs and API keys
+(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`). Run from `saferouter/`.
 
 Step 1 also needs **PandaGuard**, not a pip requirement: `attacks/` reads that repo's
 `data/SCAV/*.csv` and `autodan/prompt_group.yaml` by path (`PANDA_GUARD_ROOT`), so it
