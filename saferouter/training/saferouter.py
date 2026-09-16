@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 # Model pool and pricing live in cost/; a copy here would drift.
 from routers import SafetyOutcomePredictor
-from routers.saferouter import _fit_isotonic, _fit_temperature
+from routers.saferouter import _fit_temperature
 from utils.data_io import make_folds
 from utils.evaluate import (ensemble_evaluate, ensemble_threshold_sweep, evaluate,
                             evaluate_risk_gate, pooled_micro, select_tau)
@@ -34,8 +34,7 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
                 adv_train_idx, batch_size=512, device="cuda",
                 focal_gamma=0.5, rank_weight=0.3, cost_train_weight=0.0,
                 probe_costs=None, asr_target=0.01,
-                cost_focal_alpha=0.0, cost_pred_weight=0.0, safety_loss="focal",
-                unsafe_weight=1.0):
+                cost_focal_alpha=0.0, cost_pred_weight=0.0, unsafe_weight=1.0):
     """One epoch. Loss = focal_safety + ranking + risk_bce + quality_mse
          + λ_detach·max(0, batch_asr−ε)   (primal: θ reduces ASR)
          − λ·max(0, batch_asr−ε)_detach   (dual: λ rises while ASR > ε)
@@ -86,13 +85,9 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
         bce = F.binary_cross_entropy_with_logits(
             safety_logits, targets_clamped, reduction='none')
         pt = p * targets_clamped + (1 - p) * (1 - targets_clamped)
-        if safety_loss == "bce":
-            focal = bce
-        elif safety_loss == "inverse_focal":
-            # up-weights confident-correct cells -> better tail calibration (2505.23463)
-            focal = ((1 + pt) ** focal_gamma) * bce
-        else:  # "focal" (default): down-weights easy cells
-            focal = ((1 - pt) ** focal_gamma) * bce
+        # Inverse focal: up-weight confident-correct cells (2505.23463). Plain
+        # focal does the opposite and calibrates the tail worse here.
+        focal = ((1 + pt) ** focal_gamma) * bce
         if cost_focal_alpha > 0:
             cost_w = 1.0 / (1.0 + cost_focal_alpha * probe_costs[batch_adv])
             focal = focal * cost_w
@@ -272,22 +267,16 @@ def train_one_fold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
             probe_costs=probe_costs, asr_target=args.asr_target,
             cost_focal_alpha=args.cost_focal_alpha,
             cost_pred_weight=args.cost_pred_weight,
-            safety_loss=args.safety_loss, unsafe_weight=args.unsafe_weight)
+            unsafe_weight=args.unsafe_weight)
 
         if (epoch + 1) % eval_every == 0 or epoch == 0:
-            if args.ckpt_mode == "constraint":
-                # Lexicographic: feasible (val ASR < target) at min cost, else min ASR.
-                pts = [evaluate(net, adv_embs, safety_tensor, val_idx, COST_MATRIX,
-                                device=args.device, probe_costs=probe_costs,
-                                safety_threshold=tau, use_cost_head=args.use_cost_head)
-                       for tau in (0.95, 0.97, 0.98, 0.99)]
-                feas = [r["avg_realized_cost"] for r in pts if r["asr"] < args.ckpt_asr_target]
-                score = min(feas) if feas else 1.0 + min(r["asr"] for r in pts)
-            else:
-                res = evaluate(net, adv_embs, safety_tensor, val_idx, COST_MATRIX,
-                               device=args.device, probe_costs=probe_costs,
-                               safety_threshold=0.95, use_cost_head=args.use_cost_head)
-                score = res["asr"]
+            # Lexicographic: feasible (val ASR < target) at min cost, else min ASR.
+            pts = [evaluate(net, adv_embs, safety_tensor, val_idx, COST_MATRIX,
+                            device=args.device, probe_costs=probe_costs,
+                            safety_threshold=tau, use_cost_head=args.use_cost_head)
+                   for tau in (0.95, 0.97, 0.98, 0.99)]
+            feas = [r["avg_realized_cost"] for r in pts if r["asr"] < args.ckpt_asr_target]
+            score = min(feas) if feas else 1.0 + min(r["asr"] for r in pts)
 
             if score < best_asr:
                 best_asr = score
@@ -304,11 +293,7 @@ def train_one_fold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
 
     # Post-hoc calibration of P(safe) on the val split (val only).
     if args.calibrate:
-        if args.calib_mode == "isotonic":
-            _fit_isotonic(net, adv_embs, safety_tensor, val_idx, args.device)
-        else:
-            _fit_temperature(net, adv_embs, safety_tensor, val_idx, args.device,
-                             mode=args.calib_mode)
+        _fit_temperature(net, adv_embs, safety_tensor, val_idx, args.device)
 
     return net
 

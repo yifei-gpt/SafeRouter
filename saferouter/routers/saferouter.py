@@ -2,7 +2,6 @@
 import sys
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -47,9 +46,6 @@ class SafetyOutcomePredictor(nn.Module):
         self.cost_head = nn.Linear(hidden_dim, n_models * n_composites)
         # Per-cell P(safe) temperature, fit on val.
         self.register_buffer("temperature", torch.ones(n_models, n_composites))
-        # calib_iso>0.5 swaps temperature for the 256-pt monotone map.
-        self.register_buffer("calib_iso", torch.zeros(1))
-        self.register_buffer("iso_y", torch.linspace(0.0, 1.0, 256))
         self.register_buffer("cost_log_mean", torch.zeros(1))   # cost-target normalization
         self.register_buffer("cost_log_std", torch.ones(1))
 
@@ -85,14 +81,7 @@ class SafetyOutcomePredictor(nn.Module):
         return logits
 
     def calibrate_psafe(self, logits):
-        """Calibrated P(safe): a fitted 256-pt isotonic map, else temperature scaling."""
-        if float(self.calib_iso) > 0.5:
-            p = torch.sigmoid(logits).clamp(0.0, 1.0)
-            G = self.iso_y.numel()
-            pos = p * (G - 1)
-            lo = pos.floor().long().clamp(0, G - 2)
-            t = (pos - lo.float())
-            return (self.iso_y[lo] * (1 - t) + self.iso_y[lo + 1] * t).clamp(0.0, 1.0)
+        """P(safe), temperature-scaled per cell by the temperature fit on val."""
         return torch.sigmoid(logits / self.temperature)
 
     def predict_safety(self, x):
@@ -137,29 +126,9 @@ def cheap_first(p_safe, cost, min_p_safe):
                        flat_p.argmax(1))
     return pick, ok
 
-def _fit_isotonic(net, adv_embs, safety_tensor, val_idx, device):
-    """Isotonic calibration of P(safe), fitted on val only. Maps raw sigmoid ->
-    empirical safe-rate on a 256-pt grid, so the threshold binds the TRUE rate."""
-    from sklearn.isotonic import IsotonicRegression
-    net.eval()
-    with torch.no_grad():
-        logits, _ = net(adv_embs[val_idx].to(device))
-    tgt = safety_tensor[val_idx].to(device)
-    mask = (tgt >= 0)
-    if int(mask.sum()) < 256:
-        return
-    p = torch.sigmoid(logits)[mask].float().cpu().numpy()
-    y = tgt.clamp(0, 1)[mask].float().cpu().numpy()
-    iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
-    iso.fit(p, y)
-    grid = np.linspace(0.0, 1.0, net.iso_y.numel()).astype(np.float32)
-    ys = iso.predict(grid).astype(np.float32)
-    net.iso_y.copy_(torch.tensor(ys, device=net.iso_y.device))
-    net.calib_iso.fill_(1.0)
-
-def _fit_temperature(net, adv_embs, safety_tensor, val_idx, device, mode="scalar"):
-    """Temperature fitted on val only. 'scalar': one shared T. 'vector': per-cell T,
-    L2-regularized toward the scalar so sparse cells don't overfit."""
+def _fit_temperature(net, adv_embs, safety_tensor, val_idx, device):
+    """Per-cell temperature fitted on val only, L2-regularized toward a shared
+    scalar so that sparsely-covered cells cannot overfit."""
     net.eval()
     with torch.no_grad():
         logits, _ = net(adv_embs[val_idx].to(device))          # (V,10,12) raw
@@ -181,8 +150,6 @@ def _fit_temperature(net, adv_embs, safety_tensor, val_idx, device, mode="scalar
     opt.step(cl_s)
     s_val = float(s.exp().clamp(0.3, 5.0).item())
     net.temperature.fill_(s_val)
-    if mode != "vector":
-        return
 
     # Per-cell refinement around the scalar anchor (L2 toward 0 in log space).
     logT = torch.full((net.n_models, net.n_composites), float(s.item()),
@@ -224,7 +191,7 @@ def load_fold_nets(run_dirs, fold, device="cuda", verbose=False):
                 continue
             arch = {k: v for k, v in blob["arch"].items() if k != "quality_mode"}
             net = SafetyOutcomePredictor(**arch)
-            net.load_state_dict(state, strict=False)   # old ckpts lack calib_iso/iso_y
+            net.load_state_dict(state, strict=False)   # older ckpts carry extra buffers
             nets.append(net.to(device).eval())
     return nets, test_idx, optval_idx, dropped
 

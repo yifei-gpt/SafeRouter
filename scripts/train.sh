@@ -9,7 +9,7 @@ O=../data/checkpoints/k18_retrain; mkdir -p "$O"
 # Pre-registered protocol + config flags. Do not tune these to report a result.
 DEVICE=cuda
 C="--kfold 7 --fold-seed 100 --epochs 100 --n-seeds 6 --cost-train 1.0 --device $DEVICE"
-F="--cost-pred-weight 0.5 --use-cost-head --calibrate --calib-mode vector --safety-loss inverse_focal --ckpt-mode constraint --ckpt-asr-target 0.003 --asr-target 0.003 --op-asr-target 0.003 --save-nets"
+F="--cost-pred-weight 0.5 --use-cost-head --calibrate --ckpt-asr-target 0.003 --asr-target 0.003 --op-asr-target 0.003 --save-nets"
 
 run(){ local n="$1"; shift; echo "=== $(date '+%F %T') $n START ==="; \
   python train.py saferouter $C $F "$@" --save-dir "$O/$n" > "$O/$n.log" 2>&1; \

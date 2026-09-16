@@ -68,17 +68,10 @@ def add_saferouter_flags(parser):
                         help="Decide cheap-first selection by predicted per-query cost (needs cost-pred-weight>0)")
     parser.add_argument("--calibrate", action="store_true",
                         help="Fit a per-net temperature for P(safe) on the val split")
-    parser.add_argument("--calib-mode", type=str, default="scalar", choices=["scalar", "vector", "isotonic"],
-                        help="One shared T, a per-(model,defense) T, or a 256-pt isotonic map")
-    parser.add_argument("--safety-loss", type=str, default="focal",
-                        choices=["focal", "bce", "inverse_focal"],
-                        help="Safety-head loss reweighting (inverse_focal helps tail calibration)")
     parser.add_argument("--unsafe-weight", type=float, default=1.0,
                         help="Asymmetric upweight on unsafe-cell loss (targets false-safe ASR)")
-    parser.add_argument("--ckpt-mode", type=str, default="asr", choices=["asr", "constraint"],
-                        help="Checkpoint metric: best val ASR, or min cost s.t. val ASR<ckpt-asr-target")
     parser.add_argument("--ckpt-asr-target", type=float, default=0.008,
-                        help="Feasibility threshold for --ckpt-mode constraint")
+                        help="Val ASR a checkpoint must clear before cost decides")
     parser.add_argument("--op-asr-target", type=float, default=OP_ASR_TARGET,
                         help="Operating-point ASR target; τ* picked on optval (min cost s.t. ASR<this)")
     parser.add_argument("--save-nets", action="store_true",
