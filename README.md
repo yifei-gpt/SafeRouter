@@ -119,11 +119,10 @@ bigger is not safer.
 
 ## Data
 
-The attacks ship; the outcomes do not. The responses and judgements (~6.8 GB)
-record which (attack, model, defense) cells actually succeed, so they stay out
-while the paper is under review, for release on publication through a gated
-request. The pipeline below regenerates them: steps 1–3 need GPUs and API keys
-(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`), run from `saferouter/`.
+The responses and judgements under `data/` (~6.8 GB) are not included: they record
+which (attack, model, defense) cells actually succeed. We will release them for
+research use on publication. The pipeline below regenerates them; steps 1–3 need
+GPUs and API keys (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`). Run from `saferouter/`.
 
 Step 1 also needs **PandaGuard**, not a pip requirement: `attacks/` reads that repo's
 `data/SCAV/*.csv` and `autodan/prompt_group.yaml` by path (`PANDA_GUARD_ROOT`), so it
