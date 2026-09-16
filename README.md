@@ -2,15 +2,15 @@
 
 Security-aware routing for multi-LLM systems: SafeRouter picks a **(model, defense)
 pair per query**, spending defensive budget only where its safety head says it is
-needed. Evaluated on 8,943 adversarial probes (559 goals × 16 attack methods),
-held out **by attack method**.
+needed. Evaluated on 8,943 adversarial probes — 559 goals across 16 attack
+methods — held out **by attack method**.
 
 Four heads on a frozen Qwen3-Embedding-0.6B backbone — **safety** P(safe | query,
 model, defense) over all 10 × 16 = 160 cells, **cost**, **risk** P(adversarial) for
-gating, and a **quality** head for benign routing, all trained together. Among cells with calibrated
-P(safe) > τ it takes the predicted-cheapest; τ\* is the cheapest threshold
-whose validation-ASR Clopper–Pearson **upper bound** clears an a-priori target, since
-a point estimate overfits the split (`select_tau()`).
+gating, and a **quality** head for benign routing, all trained together. Among
+cells with calibrated P(safe) > τ it takes the predicted-cheapest; τ\* is the
+cheapest threshold whose validation-ASR Clopper–Pearson **upper bound** clears an
+a-priori target, since a point estimate overfits the split (`select_tau()`).
 
 ## Install
 
@@ -55,7 +55,7 @@ saferouter/
     carrot_knn.py        CARROT
     mirt.py              IRT-Router
     ensemble.py          pool per-fold nets across runs → honest frontier
-  train.py               train.py {saferouter | baselines | ensemble}
+  train.py               {saferouter | baselines | ensemble}
   eval.py                ASR/cost for every router on the adversarial probes
   cost/                  pricing + per-probe cost tensor from actual token counts
   probe/                 adversarial / benign / benign-defense probe drivers
@@ -63,24 +63,25 @@ saferouter/
   judges/                ASR (PAIR) · quality
   attacks/               attack-prompt generation (via PandaGuard)
 scripts/                 install.sh · train.sh · judge.sh · start_local.sh
-data/                    attack prompts here; responses + judgements withheld
+data/                    attack prompts; responses + judgements withheld
 ```
 
 ## Train
 
 ```bash
-bash scripts/train.sh                     # 3 configs × 6 seeds → an 18-net ensemble
+bash scripts/train.sh                     # 3 configs × 6 seeds → 18 nets
 ```
 
-Reads the embeddings, cost tensor and labels under `data/`; no GPU serving or API
-keys. Baselines: `python train.py baselines`. Then `python eval.py` scores every
-router on the probes — the baselines pick a model only, so they land at ('s0','s0'),
-while SafeRouter picks a cell out of 160 at each fold's τ*.
+Reads the embeddings, cost tensor and labels under `data/` (see [Data](#data));
+no GPU serving or API keys. Baselines: `python train.py baselines`. Then
+`python eval.py` scores every router on the probes — the baselines pick a model
+only, so they land at ('s0','s0'), while SafeRouter picks a cell out of 160 at
+each fold's τ*.
 
 ## Routing a query
 
-Two queries go to a trained router — a benign one and a shipped jailbreak probe.
-From `saferouter/`:
+Two queries go to a trained router — a benign one and a jailbreak probe from
+`data/`. Needs the per-fold nets `scripts/train.sh` writes. From `saferouter/`:
 
 ```python
 from cost import COMPOSITES, MODELS
@@ -139,7 +140,7 @@ its unpinned deps cannot swap them. It also pins protobuf <6; expected.
 
 ```bash
 python attacks/generate_attacks.py --phase all   # 1. attack prompts
-python -m probe.build_probe_input                #    → clean 559 × 16 grid
+python -m probe.build_probe_input                #    → 559 goals x 16 methods
 python -m probe.adversarial                      # 2. probe 10 models × 16 composites
 python -m probe.benign && python -m probe.benign_defense
 python -m utils.embed all                        # 3. embeddings
