@@ -119,20 +119,11 @@ bigger is not safer.
 
 ## Data
 
-The repo carries the attack side: the 8,943 probes, the 10,294 generated attack
-prompts behind them, and the goal lists they came from. Those are derived from
-public benchmarks (HarmBench, Sorry-Bench, PandaBench) with public attack
-implementations, so shipping them adds nothing that is not already out there,
-and the routing example above reads one of them.
-
-What is held back is the outcome side — the model responses and the jailbreak
-judgements, about 6.8 GB. That is the record of which (attack, model, defense)
-combinations actually succeed against which model, which is the part worth
-withholding, and it stays out while the paper is under review. We will release
-it on publication for research use, through a gated request.
-
-The pipeline below regenerates it. Steps 1–3 need GPUs and API keys
-(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`). Run from `saferouter/`.
+The attacks ship; the outcomes do not. The responses and judgements (~6.8 GB)
+record which (attack, model, defense) cells actually succeed, so they stay out
+while the paper is under review, for release on publication through a gated
+request. The pipeline below regenerates them: steps 1–3 need GPUs and API keys
+(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`), run from `saferouter/`.
 
 Step 1 also needs **PandaGuard**, not a pip requirement: `attacks/` reads that repo's
 `data/SCAV/*.csv` and `autodan/prompt_group.yaml` by path (`PANDA_GUARD_ROOT`), so it
