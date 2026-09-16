@@ -56,8 +56,6 @@ COMPOSITES = [(p, q) for p in PRE for q in POST]
 N_COMPOSITES = len(COMPOSITES)
 COMPOSITE_TO_IDX = {c: i for i, c in enumerate(COMPOSITES)}
 
-# ---- Load pricing from price.json ----
-
 _price_data = json.load(open(HERE / "price.json"))["models"]
 _PRICES = {}
 for entry in _price_data.values():
@@ -90,10 +88,10 @@ MODEL_COSTS = {
 MODEL_INPUT_PRICES = {m: p[0] for m, p in MODEL_PRICING.items()}
 
 def per_query_costs(path, model, per_1000q=True):
-    """query id -> cost, from the api_usage recorded in a response file.
-    $/1000q by default; per_1000q=False gives $/query. Queries whose api_usage is
-    missing or empty are absent from the result -- callers decide whether that is
-    fatal rather than getting a silent average."""
+    """query id -> cost, from the api_usage recorded in a response file. $/1000q
+    by default; per_1000q=False gives $/query. Queries whose api_usage is
+    missing or empty are absent from the result -- callers decide whether that
+    is fatal rather than getting a silent average."""
     inp, out = MODEL_PRICING[model]
     scale = 1e3 if per_1000q else 1.0
     costs = {}

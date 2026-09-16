@@ -39,6 +39,7 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
     """One epoch. Loss = focal_safety + ranking + risk_bce + quality_mse
          + λ_detach·max(0, batch_asr−ε)   (primal: θ reduces ASR)
          − λ·max(0, batch_asr−ε)_detach   (dual: λ rises while ASR > ε)
+         + cost_pred_weight·smooth_l1     (cost head, off a detached backbone)
     All data must already be on `device`."""
     net.train()
 
@@ -65,7 +66,6 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
     n_batches = max(n_adv_batches, n_ben_batches)
 
     for b in range(n_batches):
-        # Batch indices (cycle shorter dataset)
         a_start = (b % n_adv_batches) * batch_size
         batch_adv = adv_perm[a_start:a_start + batch_size]
         b_start = (b % n_ben_batches) * batch_size
@@ -204,8 +204,6 @@ def train_epoch(net, optimizer, adv_embs, safety_tensor,
 
     return total_loss / max(n_steps, 1)
 
-
-# ---- Evaluation ----
 
 # ---- K-fold ----
 
@@ -360,7 +358,6 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
                 continue
             fold_nets.append(net)
 
-            # Quick single-seed eval
             res = evaluate(net, adv_embs, safety_tensor, test_idx,
                           COST_MATRIX, device=args.device, probe_costs=probe_costs,
                           safety_threshold=0.95, use_cost_head=args.use_cost_head)
@@ -420,7 +417,6 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
               f"realized=${ens_res['avg_realized_cost']:.4f}/1000q "
               f"risk_AUC={risk_res['auc']:.3f}")
 
-    # Summary
     micro_asr, avg_realized, total_jb, total_n = pooled_micro(all_results)
     fold_asrs = [r["test_asr"] for r in all_results]
 
@@ -451,7 +447,6 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
         marker = " ◀" if asr_t < 0.02 and cost_t < 0.10 else ""
         print(f"    thresh={t:.3f}: ASR={asr_t*100:.2f}% ({total_jb_t}/{total_n_t}) cost=${cost_t:.4f}{marker}")
 
-    # Save
     os.makedirs(args.save_dir, exist_ok=True)
     out = Path(args.save_dir) / "sop_results.json"
     with open(out, "w") as f:

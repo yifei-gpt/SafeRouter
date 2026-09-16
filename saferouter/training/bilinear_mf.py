@@ -29,9 +29,9 @@ def build_quality_pairs(query_indices, score_mat, qids, q_id_to_idx):
     scores, so we instantiate the same objective from correctness: binarize at
     CORRECT_THR and pair every correct model against every incorrect one.
 
-    Do NOT use a naive "argmax-best vs the rest" over CONTINUOUS scores: near-ties
-    on easy queries crown a small model the winner and the router collapses toward
-    cheap/weak models (~0.53 quality vs ~0.85)."""
+    Do NOT use a naive "argmax-best vs the rest" over CONTINUOUS scores:
+    near-ties on easy queries crown a small model the winner and the router
+    collapses toward cheap/weak models (~0.53 quality vs ~0.85)."""
     out = []
     for qi in query_indices:
         emb_idx = q_id_to_idx[qids[qi]]

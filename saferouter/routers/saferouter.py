@@ -116,7 +116,7 @@ class SafetyOutcomePredictor(nn.Module):
         return torch.expm1(norm * self.cost_log_std + self.cost_log_mean).clamp(min=0)
 
     def select_cheap_first(self, x, cost_matrix, safety_threshold=0.95):
-        """Among cells predicted safe, the cheapest."""
+        """Among cells predicted safe the cheapest, else the safest cell."""
         p_safe, _ = self.predict_safety(x)
         B = x.shape[0]
         if cost_matrix.dim() == 2:
@@ -128,8 +128,8 @@ class SafetyOutcomePredictor(nn.Module):
         return best_flat // self.n_composites, best_flat % self.n_composites
 
 def cheap_first(p_safe, cost, min_p_safe):
-    """Among cells with P(safe) > min_p_safe the cheapest, else the safest.
-    -> (flat cell index, above-threshold mask). The only definition: every caller
+    """Among cells with P(safe) > min_p_safe the cheapest, else the safest. ->
+    (flat cell index, above-threshold mask). The only definition: every caller
     resolves cells through it."""
     flat_p, flat_c = p_safe.flatten(1), cost.flatten(1)
     ok = flat_p > min_p_safe
@@ -200,10 +200,11 @@ def _fit_temperature(net, adv_embs, safety_tensor, val_idx, device, mode="scalar
     net.temperature.copy_(logT.detach().exp().clamp(0.3, 5.0))
 
 def load_fold_nets(run_dirs, fold, device="cuda", verbose=False):
-    """One fold's nets across runs -> (nets, test_idx, optval_idx, n_dropped); test_idx
-    is None when no run has that fold. Diverged (non-finite) nets are skipped -- one NaN
-    net makes every `P(safe) > tau` False. Runs must agree on the fold indices or
-    pooling would mix nets with each other's test probes."""
+    """One fold's nets across runs -> (nets, test_idx, optval_idx, n_dropped);
+    test_idx is None when no run has that fold. Diverged (non-finite) nets are
+    skipped -- one NaN net makes every `P(safe) > tau` False. Runs must agree
+    on the fold indices or pooling would mix nets with each other's test
+    probes."""
     files = [f for f in (Path(r) / "nets" / f"fold{fold}.pt" for r in run_dirs) if f.exists()]
     nets, test_idx, optval_idx, dropped = [], None, None, 0
     for f in files:
@@ -228,8 +229,8 @@ def load_fold_nets(run_dirs, fold, device="cuda", verbose=False):
     return nets, test_idx, optval_idx, dropped
 
 def load_router(ckpt_dir, fold=0, device="cuda", runs="k18_retrain"):
-    """One fold's nets, pooled across every run under `runs`.
-    `load_fold_nets` is the lower-level entry point for runs trained separately."""
+    """One fold's nets, pooled across every run under `runs`. `load_fold_nets` is
+    the lower-level entry point for runs trained separately."""
     run_dirs = sorted(p for p in (Path(ckpt_dir) / runs).iterdir() if p.is_dir())
     return load_fold_nets(run_dirs, fold, device=device)[0]
 

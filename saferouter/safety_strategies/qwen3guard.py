@@ -142,7 +142,7 @@ def _parse_guard_output(text: str) -> dict:
 
 
 class Qwen3GuardStrategy(BaseStrategy):
-    """Qwen3Guard input classifier — block when Safety=Unsafe or Controversial on the input."""
+    """Qwen3Guard input classifier: block when Safety=Unsafe or Controversial."""
 
     name = "qwen3guard"
     reference = "Qwen3Guard-Gen-0.6B (Alibaba 2025)"

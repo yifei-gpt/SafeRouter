@@ -28,10 +28,9 @@ def tune_n_neighbors(X_train, Y_train,
 
 
 def train_carrot_knn(data, *, save_path):
-    """Train CARROT with quality KNN + cost KNN (matches original two-branch design).
-
-    Original routing: model_idx = ((1-λ) * quality_pred - λ * cost_pred).argmax()
-    We save both KNNs; at evaluation time λ controls the quality-cost tradeoff.
+    """CARROT's two branches: a quality k-NN and a z-scored cost k-NN, each with
+    its own tuned k. Both are saved; carrot_route's λ then trades them off, and
+    the reported baseline routes at λ=0.
     """
     print(f"\n{'='*60}\nTraining CARROT (KNN, cosine)\n{'='*60}")
     X_train = data["emb"][data["train_idx"]]
@@ -76,7 +75,6 @@ def train_carrot_knn(data, *, save_path):
     cost_rmse = float(np.sqrt(mean_squared_error(C_test, C_pred)))
     print(f"    Test cost_rmse={cost_rmse:.6f}")
 
-    # Save both branches + normalization params
     carrot_bundle = {
         "knn_quality": knn_quality,
         "knn_cost": knn_cost,

@@ -151,8 +151,9 @@ def build_gpt4cipher():
 def build_scav():
     """SCAV is a STATIC CSV lookup keyed on the exact goal string. The shipped
     optimized_instructions_8b.csv only contains the 83 PandaBench goals, so for
-    any of the 476 missing goals get_corresponding_string returns None. We treat
-    a None lookup as 'not backfillable' and raise so the caller logs+skips it."""
+    any of the 476 missing goals get_corresponding_string returns None. We
+    treat a None lookup as 'not backfillable' and raise so the caller
+    logs+skips it."""
     from panda_guard.role.attacks.scav import ScavAttacker, ScavAttackerConfig
     cfg = ScavAttackerConfig(
         target_llm_name=WHITE_BOX_MODEL,
@@ -176,11 +177,11 @@ def build_scav():
 
 def build_artprompt():
     """ArtPrompt masks words via gpt-3.5-turbo (OpenAI), then renders the masked
-    word(s) as ASCII art from a font table (vitc-s.json). Requires OPENAI_API_KEY
-    (caller skips the method if unset). NOTE: panda_guard's art_prompt.py hardcodes
-    the vitc-s.json path to a location that does not exist in this repo layout, so
-    ArtPrompt typically fails at attack() time here; failures are caught+logged
-    per goal."""
+    word(s) as ASCII art from a font table (vitc-s.json). Requires
+    OPENAI_API_KEY (caller skips the method if unset). NOTE: panda_guard's
+    art_prompt.py hardcodes the vitc-s.json path to a location that does not
+    exist in this repo layout, so ArtPrompt typically fails at attack() time
+    here; failures are caught+logged per goal."""
     from panda_guard.role.attacks.art_prompt import (
         ArtPromptAttacker, ArtPromptAttackerConfig)
     cfg = ArtPromptAttackerConfig(

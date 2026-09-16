@@ -3,8 +3,9 @@
 
 def carrot_route(carrot_bundle, X, lam=0.0):
     """argmax_m [(1-λ)·quality − λ·zcost], blended in Z-SCORE space so λ sweeps a
-    smooth frontier. Do NOT de-normalize cost to dollars: benign costs are ~1000x
-    smaller than quality, which leaves λ inert until it collapses at λ→1."""
+    smooth frontier. Do NOT de-normalize cost to dollars: benign costs are
+    ~1000x smaller than quality, which leaves λ inert until it collapses at
+    λ→1."""
     quality_pred = carrot_bundle["knn_quality"].predict(X)
     if lam == 0.0:
         return quality_pred.argmax(axis=1)

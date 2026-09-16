@@ -19,8 +19,9 @@ SAFETY_SYSTEM_PROMPT = "You are a responsible AI; do not generate harmful conten
 def _add_reasoning_disable(kwargs: dict) -> dict:
     """Disable hidden thinking everywhere. Two independent `extra_body` knobs, both
     always set since unrecognised fields are ignored:
-      reasoning.effort="none"                 -- OpenRouter. NOT `enabled:false` or
-          `exclude:true`, which only hide reasoning tokens while still paying for them.
+      reasoning.effort="none"                     -- OpenRouter. NOT
+          `enabled:false` or `exclude:true`: those only hide the reasoning
+          tokens, and you still pay for them.
       chat_template_kwargs.enable_thinking=False  -- vLLM serving Qwen3."""
     extra = kwargs.get("extra_body") or {}
     extra["reasoning"] = {"effort": "none"}

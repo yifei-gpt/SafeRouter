@@ -42,7 +42,6 @@ def load_safety_data():
     keys = d["keys"]
     key_to_idx = {k: i for i, k in enumerate(keys)}
 
-    # Build dense safety tensor
     N = len(keys)
     safety = torch.full((N, N_MODELS, N_COMPOSITES), -1, dtype=torch.float32)  # -1 = missing
 
@@ -67,12 +66,10 @@ def load_safety_data():
                 continue  # ASR judge failed -> leave cell missing (-1), never count as safe
             safety[pi, mi, ci] = 1.0 - float(r["is_jailbroken"])  # 1=safe, 0=jailbroken
 
-    # Check coverage
     valid = (safety >= 0).sum().item()
     total = N * N_MODELS * N_COMPOSITES
     print(f"  Safety tensor: {tuple(safety.shape)}, coverage: {valid}/{total} ({valid/total*100:.1f}%)")
 
-    # Load per-probe cost tensor if available
     probe_costs = None
     if COST_TENSOR_PATH.exists():
         ct = torch.load(COST_TENSOR_PATH, map_location="cpu", weights_only=False)
@@ -88,11 +85,12 @@ def load_safety_data():
     return embs, keys, safety, probe_costs
 
 def load_benign_data(per_1000q=True, strict_costs=False, dtype=torch.float32):
-    """-> embs (N,1024), qids, quality (N,M) at S0, costs (N,M), train_idx, test_idx,
-    over the queries every model judged. costs are $/1000q, or $/query with
-    per_1000q=False; strict_costs raises on a query with no recorded api_usage
-    instead of falling back to the model's average. dtype float64 keeps the judge
-    scores exactly as recorded -- k-NN ties at CORRECT_THR turn on the last bits."""
+    """-> embs (N,1024), qids, quality (N,M) at S0, costs (N,M), train_idx,
+    test_idx, over the queries every model judged. costs are $/1000q, or
+    $/query with per_1000q=False; strict_costs raises on a query with no
+    recorded api_usage instead of falling back to the model's average. dtype
+    float64 keeps the judge scores exactly as recorded -- k-NN ties at
+    CORRECT_THR turn on the last bits."""
     d = torch.load(EMB_BEN, map_location="cpu", weights_only=False)
     embs = d["embeddings"].float()
     qids = d["question_ids"]
@@ -115,7 +113,6 @@ def load_benign_data(per_1000q=True, strict_costs=False, dtype=torch.float32):
     per_query_costs = {m: cost_per_query(RESPONSE_DIR / RESPONSE_FILES[m], m,
                                         per_1000q=per_1000q) for m in MODELS}
 
-    # Intersect
     valid_qids = sorted(
         set(qid_to_idx.keys()) &
         set.intersection(*(set(scores[m].keys()) for m in MODELS))
@@ -157,9 +154,9 @@ def make_folds(methods, k, seed=42):
     return folds
 
 def load_baseline_data():
-    """The same benign set as numpy arrays and $/query, plus the full 28K embedding
-    table the baselines index by question id. A missing cost is fatal here rather
-    than averaged over."""
+    """The same benign set as numpy arrays and $/query, plus the full 28K
+    embedding table the baselines index by question id. A missing cost is fatal
+    here rather than averaged over."""
     embs, qids, quality, costs, train_idx, test_idx = load_benign_data(
         per_1000q=False, strict_costs=True, dtype=torch.float64)
     raw = torch.load(EMB_BEN, map_location="cpu", weights_only=False)

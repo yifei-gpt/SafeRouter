@@ -36,10 +36,10 @@ def parden_repeat_messages(response: str) -> list:
 
 
 def parden_bleu(original: str, repeat: str) -> float:
-    """BLEU(original, repeat), clipped to the shorter of the two (PARDEN get_bleu).
+    """BLEU(original, repeat), clipped to the shorter side (PARDEN get_bleu).
 
-    A refusal/empty/garbled repeat yields a low score; a faithful repeat yields a
-    high one. Returns 0.0 when either side is empty (refuse-to-repeat == harmful).
+    A refusal, an empty string or a garbled repeat scores low; a faithful
+    repeat scores high. Either side empty -> 0.0 (refusal == harmful).
     """
     from nltk.translate.bleu_score import sentence_bleu
     ref = (original or "").replace("/n", "")

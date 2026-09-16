@@ -57,8 +57,9 @@ def load_encoder(model_id="Qwen/Qwen3-Embedding-0.6B"):
 def assert_embeddings_distinct(embs, texts, name, min_ratio=0.99):
     """Guard against the truncation/pooling corruption: DISTINCT input texts must
     yield DISTINCT embeddings. (The old bug collapsed e.g. 9756 probes to 6907
-    unique rows, or MiniLM to 5143/9756.) Genuinely-identical texts SHOULD share
-    a vector, so we compare DISTINCT embeddings vs DISTINCT texts, not raw rows."""
+    unique rows, or MiniLM to 5143/9756.) Genuinely-identical texts SHOULD
+    share a vector, so we compare DISTINCT embeddings vs DISTINCT texts, not
+    raw rows."""
     n_text = len({t for t in texts})
     # Round normalized vectors so float noise doesn't inflate the unique count.
     rounded = (embs.float() * 1e4).round()
@@ -85,9 +86,10 @@ def embed_texts(tok, enc, texts, batch_size=BATCH):
 
 
 def _derive_query_id(row):
-    """query_id from an atoms row (has `query_id`) OR a probe_input row (`question_id`).
-    Mirrors probe/adversarial.py: keep pb_/hb_/sb_-namespaced ids, else prefix pb_.
-    Lets embed_adversarial read either atoms.jsonl or the cleaned probe_input."""
+    """query_id from an atoms row (has `query_id`) OR a probe_input row
+    (`question_id`). Mirrors probe/adversarial.py: keep pb_/hb_/sb_-namespaced
+    ids, else prefix pb_. Lets embed_adversarial read either atoms.jsonl or the
+    cleaned probe_input."""
     qid = row.get("query_id")
     if qid is None:
         qid = str(row["question_id"])

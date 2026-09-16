@@ -5,8 +5,9 @@ import torch
 def fit(model, optim, tr_ldr, val_ldr, step, validate, save_path, epochs, patience):
     """Train until the val metric stops improving, checkpointing each improvement.
 
-    `step(batch) -> loss` and `validate(loader) -> (metric, text)`, where a higher
-    metric is better and `text` is appended to the per-epoch line. -> best metric.
+    `step(batch) -> loss` and `validate(loader) -> (metric, text)`, where a
+    higher metric is better and `text` is appended to the per-epoch line. ->
+    best metric.
     """
     best, pat = 0.0, 0
     for ep in range(1, epochs + 1):

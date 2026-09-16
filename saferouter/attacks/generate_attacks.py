@@ -50,7 +50,7 @@ def _server_ready(base_url, timeout=2.0):
 
 
 def _clean_caches():
-    """Remove stale torch/vllm/triton caches that cause PermissionError on cluster nodes."""
+    """Remove stale torch/vllm/triton caches: they PermissionError on cluster nodes."""
     home = os.path.expanduser("~")
     dirs = [
         os.path.join(home, ".cache", "vllm", "torch_compile_cache"),
@@ -555,10 +555,10 @@ def generate_pair_attacks(goals, existing, out_f, n_iterations=5, max_workers=32
 
 
 def generate_autodan_attacks(goals, existing, out_f, n_iterations=100):
-    """AutoDAN via PandaGuard's AutoDanAttacker: a gradient-based genetic algorithm.
-    Llama-3.1-8B is loaded through HuggingFaceLLM for white-box gradients, with the
-    vLLM proxy handling mutations at reduced gpu_mem (0.20) so the HF model,
-    gradients and activations fit alongside it (~84 GB total)."""
+    """AutoDAN via PandaGuard's AutoDanAttacker: a gradient-based genetic
+    algorithm. Llama-3.1-8B is loaded through HuggingFaceLLM for white-box
+    gradients, with the vLLM proxy handling mutations at reduced gpu_mem (0.20)
+    so the HF model, gradients and activations fit alongside it (~84 GB total)."""
     from panda_guard.role.attacks.autodan.autodan import AutoDanAttacker, AutoDanAttackerConfig
     from panda_guard.llms import HuggingFaceLLMConfig, LLMGenerateConfig
     import signal
@@ -625,8 +625,9 @@ def generate_autodan_attacks(goals, existing, out_f, n_iterations=100):
 
 def generate_gptfuzz_attacks(goals, existing, out_f):
     """GPTFuzz via PandaGuard's GPTFuzzAttacker: MCTS template selection + LLM
-    mutation + the hubert233/GPTFuzz RoBERTa predictor, with Llama-3.1-8B as both
-    attacker and target over 77 seed templates. Needs the vLLM proxy on PROXY_PORT."""
+    mutation + the hubert233/GPTFuzz RoBERTa predictor, with Llama-3.1-8B as
+    both attacker and target over 77 seed templates. Needs the vLLM proxy on
+    PROXY_PORT."""
     from panda_guard.role.attacks.gptfuzzer_attack.gptfuzz import GPTFuzzAttacker, GPTFuzzAttackerConfig
     from panda_guard.llms import LLMGenerateConfig
 

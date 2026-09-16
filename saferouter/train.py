@@ -39,11 +39,9 @@ def add_saferouter_flags(parser):
     parser.add_argument("--focal-gamma", type=float, default=0.5, help="Focal loss gamma (0.5=best)")
     parser.add_argument("--rank-weight", type=float, default=0.3, help="Ranking loss weight")
     parser.add_argument("--cost-train", type=float, default=0.5,
-                        help="Cost-aware ranking weight (operates on ground-truth-safe cells only). "
-                             "NOTE: this term lives inside loss_rank, which is then scaled by "
-                             "--rank-weight, so the EFFECTIVE cost-ranking weight is "
-                             "rank_weight * cost_train (e.g. 0.3 * 1.0 = 0.3 with the paper recipe), "
-                             "not the raw flag value.")
+                        help="Cost-aware ranking weight, on ground-truth-safe cells. It "
+                             "sits inside loss_rank, so the effective weight is "
+                             "rank_weight * cost_train, not this value.")
     parser.add_argument("--kfold", type=int, default=0, help="K-fold CV (0=random split)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fold-seed", type=int, default=42,
@@ -61,10 +59,9 @@ def add_saferouter_flags(parser):
                         help="Learning rate for Lagrange multiplier")
     parser.add_argument("--n-seeds", type=int, default=5,
                         help="Number of seeds per fold")
-    # ---- Per-query cost head + calibration + diagram search ----
     parser.add_argument("--safety-arch", type=str, default="flat",
                         choices=["flat", "bilinear"],
-                        help="Safety-head diagram (all add a zero-init correction to the flat head)")
+                        help="Safety head: flat 160-way, or bilinear adding a correction")
     parser.add_argument("--cost-pred-weight", type=float, default=0.0,
                         help="Weight for the per-query cost-regression head (0 disables it)")
     parser.add_argument("--use-cost-head", action="store_true",
@@ -72,7 +69,7 @@ def add_saferouter_flags(parser):
     parser.add_argument("--calibrate", action="store_true",
                         help="Fit a per-net temperature for P(safe) on the val split")
     parser.add_argument("--calib-mode", type=str, default="scalar", choices=["scalar", "vector", "isotonic"],
-                        help="Temperature calibration: one shared T or per-(model,defense) T")
+                        help="One shared T, a per-(model,defense) T, or a 256-pt isotonic map")
     parser.add_argument("--safety-loss", type=str, default="focal",
                         choices=["focal", "bce", "inverse_focal"],
                         help="Safety-head loss reweighting (inverse_focal helps tail calibration)")
@@ -152,7 +149,6 @@ def train_saferouter(args):
         args, adv_embs, safety_tensor, ben_embs, ben_quality,
         ben_train_idx, train_idx, probe_costs, args.seed)
 
-    # Threshold sweep
     print("\nThreshold sweep:")
     sweep = threshold_sweep(net, adv_embs, safety_tensor, test_idx,
                            COST_MATRIX, device=args.device, probe_costs=probe_costs)

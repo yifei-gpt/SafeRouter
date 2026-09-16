@@ -49,8 +49,8 @@ Now give your JSON response:
 
 def parse_judge_output(text):
     """correctness_score from judge output, clamped to [0,1]. An out-of-range
-    value is clamped rather than dropped, so a formatting slip does not silently
-    exclude the sample from the quality average."""
+    value is clamped rather than dropped, so a formatting slip does not
+    silently exclude the sample from the quality average."""
     def _clamp(x):
         return min(1.0, max(0.0, float(x)))
 
@@ -249,8 +249,8 @@ def prepare_file(input_path, output_path, resume):
     """Load one response file and work out what is still unjudged.
 
     -> (results, judged, entries), or (results, judged, None) when every row is
-    already scored. Duplicate texts carry conflicting goldens, so the goldens are
-    canonicalized first.
+    already scored. Duplicate texts carry conflicting goldens, so the goldens
+    are canonicalized first.
     """
     results = load_responses(input_path)
     canonicalize_goldens(results)
