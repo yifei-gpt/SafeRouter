@@ -317,7 +317,7 @@ def train_one_fold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
 
 def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
               ben_train_idx, ben_test_idx, idx_to_method, probe_costs=None):
-    """Run k-fold attack-method holdout evaluation with multi-seed ensemble."""
+    """Run k-fold attack-method holdout evaluation, several seeds per fold."""
     all_methods = sorted(set(idx_to_method.values()))
     folds = make_folds(all_methods, args.kfold, seed=args.fold_seed)
 
@@ -330,7 +330,7 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
         print(f"  Fold {fi}: {fold} ({n} probes)")
 
     all_results = []
-    all_fold_nets = []  # store for final ensemble eval
+    all_fold_nets = []  # kept for the final evaluation
 
     for fi, fold_methods in enumerate(folds):
         holdout = set(fold_methods)
@@ -346,7 +346,7 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
         print(f"Fold {fi}: holdout={fold_methods}, train={len(train_idx)}, "
               f"test={len(test_idx)}, optval={len(optval_idx)}")
 
-        # Train ensemble
+        # One net per seed
         fold_nets = []
         for seed in seeds:
             net = train_one_fold(
@@ -390,7 +390,7 @@ def run_kfold(args, adv_embs, safety_tensor, ben_embs, ben_quality,
                                     safety_threshold=tau_star,
                                     use_cost_head=args.use_cost_head)
 
-        # Risk gate eval (from first net in ensemble)
+        # Risk gate eval (from the first net)
         risk_res = evaluate_risk_gate(fold_nets[0], adv_embs, ben_embs, test_idx, ben_test_idx,
                                       device=args.device)
 

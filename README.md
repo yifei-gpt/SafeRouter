@@ -163,5 +163,5 @@ Action space = 4 pre × 4 post = 16 composites. Refusal is only ever emitted by 
 
 - Third-party data under `data/` (WildJailbreak, R2Bench, HarmBench, Sorry-Bench,
   PandaBench) keeps its own terms; check them before reuse.
-- `scripts/train.sh` is the pre-registered recipe; `train_saferouter.py`'s argparse
+- `scripts/train.sh` is the pre-registered recipe; `train.py saferouter`'s argparse
   defaults are a smoke test, not the paper configuration.

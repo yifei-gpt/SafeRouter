@@ -1,4 +1,4 @@
-"""One file per trainable router, plus the cross-run ensemble pooling."""
+"""One file per trainable router, plus the cross-run pooling."""
 import torch
 
 CORRECT_THR = 0.7

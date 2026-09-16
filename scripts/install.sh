@@ -109,7 +109,8 @@ def check(label, mods):
 
 check("core", ["torch", "numpy", "scipy", "sklearn", "joblib", "transformers",
                "sentence_transformers", "pandas", "tqdm", "openai", "httpx", "nltk"])
-check("saferouter", ["train_saferouter", "mega_ensemble", "train_all_routers", "embed"])
+check("saferouter", ["train", "eval", "training.saferouter", "training.ensemble",
+                     "routers", "utils.embed", "utils.data_io", "utils.evaluate"])
 
 if os.environ["PG"] == "1":
     check("panda_guard", ["panda_guard.llms", "panda_guard.role.attacks.pair",

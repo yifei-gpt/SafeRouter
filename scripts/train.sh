@@ -1,6 +1,6 @@
 #!/bin/bash
-# Full training recipe: 3 safety-head configs x 6 seeds = 18 nets, pooled into
-# one ensemble. Reads data/adversarial/probe/labels.jsonl + the cost tensor.
+# Full training recipe: 3 safety-head configs x 6 seeds = 18 nets, pooled at
+# the end. Reads data/adversarial/probe/labels.jsonl + the cost tensor.
 # Run build_cost_tensor and utils.embed first.
 set -u
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../saferouter" && pwd)"
@@ -19,7 +19,7 @@ run wide_uw3_cf20  --safety-arch flat     --hidden-dim 512 --unsafe-weight 3 --c
 run bilin_uw3_cf20 --safety-arch bilinear --hidden-dim 512 --unsafe-weight 3 --cost-focal-alpha 20
 run bilin_uw5_cf20 --safety-arch bilinear --hidden-dim 512 --unsafe-weight 5 --cost-focal-alpha 20
 
-echo "=== $(date '+%F %T') ALL 3 CONFIGS DONE; pooling the 18-net ensemble ==="
+echo "=== $(date '+%F %T') ALL 3 CONFIGS DONE; pooling the 18 nets ==="
 python train.py ensemble ../data/checkpoints/k18_final \
   "$O/wide_uw3_cf20" "$O/bilin_uw3_cf20" "$O/bilin_uw5_cf20" 2>&1 | tail -8
 echo "=== $(date '+%F %T') COMPLETE -> ../data/checkpoints/k18_final/sop_results.json ==="

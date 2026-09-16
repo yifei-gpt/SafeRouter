@@ -1,4 +1,4 @@
-"""The SafeRouter network, and how a trained ensemble resolves a query."""
+"""The SafeRouter network, and how a trained router resolves a query."""
 import sys
 from pathlib import Path
 
@@ -228,7 +228,7 @@ def load_fold_nets(run_dirs, fold, device="cuda", verbose=False):
     return nets, test_idx, optval_idx, dropped
 
 def load_router(ckpt_dir, fold=0, device="cuda", runs="k18_retrain"):
-    """One fold's net ensemble, pooled across every run under `runs`.
+    """One fold's nets, pooled across every run under `runs`.
     `load_fold_nets` is the lower-level entry point for runs trained separately."""
     run_dirs = sorted(p for p in (Path(ckpt_dir) / runs).iterdir() if p.is_dir())
     return load_fold_nets(run_dirs, fold, device=device)[0]

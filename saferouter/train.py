@@ -60,7 +60,7 @@ def add_saferouter_flags(parser):
     parser.add_argument("--lambda-lr", type=float, default=0.01,
                         help="Learning rate for Lagrange multiplier")
     parser.add_argument("--n-seeds", type=int, default=5,
-                        help="Number of seeds per fold for ensemble")
+                        help="Number of seeds per fold")
     # ---- Per-query cost head + calibration + diagram search ----
     parser.add_argument("--safety-arch", type=str, default="flat",
                         choices=["flat", "bilinear"],
@@ -85,7 +85,7 @@ def add_saferouter_flags(parser):
     parser.add_argument("--op-asr-target", type=float, default=OP_ASR_TARGET,
                         help="Operating-point ASR target; τ* picked on optval (min cost s.t. ASR<this)")
     parser.add_argument("--save-nets", action="store_true",
-                        help="Save per-fold ensemble nets (for cross-config mega-ensembling)")
+                        help="Save each fold's nets, so runs can be pooled across configs")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--save-dir", type=str, default=str(DATA / "checkpoints" / "sop"))
